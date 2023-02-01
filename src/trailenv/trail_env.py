@@ -1,8 +1,12 @@
-import gymnasium as gym
-from gymnasium import spaces
-import numpy as np
-import ipdb
 from enum import IntEnum
+
+# import gymnasium as gym
+import ipdb
+import numpy as np
+# from gymnasium import spaces
+import gym
+from gym import spaces
+
 
 class Actions(IntEnum):
   left = 0
@@ -44,19 +48,28 @@ class Entities(IntEnum):
 
 class TrailEnv(gym.Env):
   def __init__(self, width, height, start_pos, trail):
-    self.width = 6
-    self.height = 6
-    self.start_pos = [1,1]
-    self.trail = [[2,2], [3,3], [4,4]]
+    self.width = width
+    self.height = height
+    self.start_pos = start_pos
+    self.trail = trail
     self.trail_idx = 0
 
+    # self.observation_space = spaces.Box(
+    #   low=0.0,
+    #   high=1.0,
+    #   shape=(self.width+self.height,),
+    #   dtype="float32",
+    # )
     self.observation_space = spaces.Box(
-      low=0.0,
-      high=1.0,
-      shape=(self.width+self.height,),
-      dtype="int",
+      low=np.array([0.0, 0.0]),
+      high=np.array([width, height]),
+      shape=(2,),
+      dtype="float32",
     )
     self.action_space = spaces.Discrete(len(Actions))
+
+  # def seed(self, seed):
+  #   pass
 
   def _reset_grid(self):
     self.grid = np.zeros((self.width, self.height), dtype=int)
@@ -90,22 +103,25 @@ class TrailEnv(gym.Env):
     reward = 0
     if self.trail_idx < len(self.trail) and new_pos[0] == self.trail[self.trail_idx][0] and new_pos[1] == self.trail[self.trail_idx][1]:
       reward += 1
-      print('finished trail idx', self.trail_idx)
+      # print('finished trail idx', self.trail_idx)
       self.trail_idx += 1
 
-    terminated = self.trail_idx >= len(self.trail)
+    # terminated = self.trail_idx >= len(self.trail)
+    terminated = False
     truncated = False
     obs = self.gen_obs()
-    return obs, reward, terminated, truncated, {}
+    # return obs, reward, terminated, truncated, {}
+    return obs, reward, terminated, {}
 
   def gen_obs(self):
     # two one-hot vectors, one for each dimension.
-    width_vec = np.zeros(self.width, dtype=int)
-    height_vec = np.zeros(self.height, dtype=int)
-    width_vec[self.curr_pos[1]] = 1
-    height_vec[self.curr_pos[0]] = 1
-    # concat them into one vector.
-    obs = np.concatenate([width_vec, height_vec])
+    # width_vec = np.zeros(self.width, dtype=float)
+    # height_vec = np.zeros(self.height, dtype=float)
+    # width_vec[self.curr_pos[1]] = 1.0
+    # height_vec[self.curr_pos[0]] = 1.0
+    # # concat them into one vector.
+    # obs = np.concatenate([width_vec, height_vec])
+    obs = np.array(self.curr_pos)
     return obs
 
   def reset(self, *, seed=None, options=None):
@@ -115,7 +131,8 @@ class TrailEnv(gym.Env):
     init_obs = self.gen_obs()
     return init_obs
 
-  def __str__(self):
+  @property
+  def ascii(self):
     """
     Produce a pretty string of the environment's grid along with the agent.
     """
@@ -148,4 +165,4 @@ if __name__ == "__main__":
     key = input("type in wasdqezx")
     if key in KEY_ACTION_MAP:
       obs, rew, done, trunc, info = env.step(KEY_ACTION_MAP[key])
-      print(env)
+      print(env.ascii)
