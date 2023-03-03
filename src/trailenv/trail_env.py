@@ -205,18 +205,70 @@ class NoisyTrailEnv(TrailEnv):
     obs = np.concatenate([self.curr_pos, noisy_pos, [self.trail_idx]])
     return obs
 
+class NoisyFootballEnv(TrailEnv):
+  # FO: h, w, noisy h, w, trail_idx
+  # PO: 0, 0, noisy h, w, trail_idx
+  def __init__(self, width, height, start_pos, trail, y_std):
+    super().__init__(width, height, start_pos, trail)
+    self.observation_space = spaces.Box(
+      low=np.array([0.0, 0.0, 0.0, 0.0, 0]),
+      high=np.array([height, height, width, height, len(trail) ]),
+      shape=(5,),
+      dtype="float32",
+    )
+    self.y_std = y_std
+    self.rng = np.random.default_rng(12345)
+
+  def gen_obs(self):
+    noisy_pos = np.array(self.curr_pos, dtype=np.float32)
+    noisy_pos[0] += self.rng.normal(scale=self.y_std)
+    obs = np.concatenate([self.curr_pos, noisy_pos, [self.trail_idx]])
+    return obs
+
+  def step(self, action):
+    # first do the action
+    old_pos = self.curr_pos
+    new_pos = self.curr_pos + ACTION_COORDS[action]
+
+    # if agent is out of bounds or inside a wall, revert back.
+    within_bounds =  (0 <= new_pos[0] < self.height) and (0 <= new_pos[1] < self.width)
+    if not within_bounds or (self.grid[new_pos[0], new_pos[1]] == Entities.wall):
+      new_pos = self.curr_pos
+
+    # or if agent is off trail, move agent back to start.
+    on_trail = self.trail_idx < len(self.trail) and new_pos[0] == self.trail[self.trail_idx][0] and new_pos[1] == self.trail[self.trail_idx][1]
+    # print("on_trail", on_trail, " trail_idx", self.trail_idx)
+    if on_trail:
+      # print("on trail, incrementing.")
+      self.trail_idx += 1
+    else:
+      new_pos = np.array(self.start_pos)
+
+    # move the agent to the new position.
+    self.grid[old_pos[0], old_pos[1]] = Entities.empty
+    self.grid[new_pos[0], new_pos[1]] = Entities.agent
+
+    # update curr_pos for next timestep.
+    self.curr_pos = new_pos
+
+    terminated = False
+    obs = self.gen_obs()
+    # give reward if agent is on other side of the field and done with trail.
+    reward = float(self.trail_idx >= len(self.trail) and obs[-2] == self.width - 2)
+    return obs, reward, terminated, {}
 
 if __name__ == "__main__":
   width = height = 6
   start_pos = [1,1]
-  trail = [[2,2], [3,3]]
-  env = TrailEnv(width, height, start_pos, trail)
+  trail = [[2,2], [3,3], [2,4]]
+  env = NoisyFootballEnv(width, height, start_pos, trail, 2)
   env.reset()
-  ipdb.set_trace()
-  print(env)
+  # ipdb.set_trace()
+  print(env.ascii)
   done = False
   while not done:
     key = input("type in wasdqezx")
     if key in KEY_ACTION_MAP:
-      obs, rew, done, trunc, info = env.step(KEY_ACTION_MAP[key])
+      obs, rew, done, info = env.step(KEY_ACTION_MAP[key])
+      print("done", done, "| rew", rew)
       print(env.ascii)

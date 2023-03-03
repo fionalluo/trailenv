@@ -36,3 +36,10 @@ register(
     max_episode_steps=100,
     kwargs=dict(width=4,height=4,start_pos=[1,1],trail=[[2,2]])
 )
+
+register(
+    id="NoisyFootballEnv-v0",
+    entry_point="trailenv.trail_env:NoisyFootballEnv",
+    max_episode_steps=100,
+    kwargs=dict(width=6,height=6,start_pos=[1,1],trail=[[2,2], [3,3],[2,4]], y_std=5.0)
+)
