@@ -75,9 +75,9 @@ def make_lava_env(render_mode="rgb_array"):
   from minigrid.wrappers import ReseedWrapper
 
   env = CrossingEnv(size=5,  max_steps=100, render_mode=render_mode)
-  env = OldGymWrapper(env) # revert reset, step back to old gym semantics.
+  # env = OldGymWrapper(env) # revert reset, step back to old gym semantics.
   env = SymbolicObsWrapper(env) # change obs to flat vector of [81 * (object), direction]
-  env = GymActionWrapper(env)
+  # env = GymActionWrapper(env)
   env = ReseedWrapper(env, seeds=[0]) # make lava spawn deterministic.
   return env
 
@@ -86,9 +86,9 @@ def make_lava_cliff_env(render_mode="rgb_array"):
   from minigrid.wrappers import ReseedWrapper
 
   env = CliffEnv(size=7,  n_obstacles=1, max_steps=100, render_mode=render_mode)
-  env = OldGymWrapper(env) # revert reset, step back to old gym semantics.
+  # env = OldGymWrapper(env) # revert reset, step back to old gym semantics.
   env = SymbolicObsWrapper(env) # change obs to flat vector of [81 * (object), direction]
-  env = GymActionWrapper(env)
+  # env = GymActionWrapper(env)
   # env = ReseedWrapper(env, seeds=[0]) # make lava spawn deterministic.
   return env
 
@@ -96,12 +96,12 @@ if __name__ == "__main__":
   # env = CrossingEnv(size=9,  max_steps=100, render_mode="human")
   # env = SymbolicObsWrapper(env)
   # env = ReseedWrapper(env, seeds=[0]) # make lava spawn deterministic.
-  env = make_lava_env("human")
+  env = make_lava_env("rgb_array")
   env.reset()
   env.render()
   # first move down.
   action = 1  # User-defined policy function
-  observation, reward, done, info = env.step(action)
+  observation, reward, trunc, term, info = env.step(action)
   while True:
     env.render()
   print(reward, done)
