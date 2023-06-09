@@ -1,6 +1,6 @@
 from minigrid.envs import CrossingEnv
-from gym.core import Wrapper, ActionWrapper, ObservationWrapper
-from gym import spaces
+from gymnasium.core import Wrapper, ActionWrapper, ObservationWrapper
+from gymnasium import spaces
 from minigrid.core.constants import OBJECT_TO_IDX
 import numpy as np
 

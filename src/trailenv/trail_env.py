@@ -3,9 +3,8 @@ from enum import IntEnum
 # import gymnasium as gym
 import ipdb
 import numpy as np
-# from gymnasium import spaces
-import gym
-from gym import spaces
+from gymnasium import spaces
+import gymnasium as gym
 
 
 class Actions(IntEnum):
@@ -100,7 +99,7 @@ class TrailEnv(gym.Env):
       low=np.array([0.0, 0.0, 0]),
       high=np.array([height, width, len(trail)]),
       shape=(3,),
-      dtype="float32",
+      dtype="int64",
     )
     self.action_space = spaces.Discrete(len(Actions))
 
@@ -140,12 +139,11 @@ class TrailEnv(gym.Env):
       # print('finished trail idx', self.trail_idx)
       self.trail_idx += 1
 
-    # terminated = self.trail_idx >= len(self.trail)
-    terminated = False
+    terminated = self.trail_idx >= len(self.trail)
+    # terminated = False
     truncated = False
     obs = self.gen_obs()
-    # return obs, reward, terminated, truncated, {}
-    return obs, reward, terminated, {}
+    return obs, reward, terminated, truncated, {}
 
   def gen_obs(self):
     # two one-hot vectors, one for each dimension.
@@ -164,7 +162,7 @@ class TrailEnv(gym.Env):
     self.trail_idx = 0
     self._reset_grid()
     init_obs = self.gen_obs()
-    return init_obs
+    return init_obs, {}
 
   @property
   def ascii(self):
