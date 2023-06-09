@@ -255,6 +255,106 @@ class NoisyFootballEnv(TrailEnv):
     reward = float(self.trail_idx >= len(self.trail) and obs[-2] == self.width - 2)
     return obs, reward, terminated, {}
 
+class ObsDictTrailEnv(gym.Env):
+  def __init__(self, width, height, start_pos, trail):
+    self.width = width
+    self.height = height
+    self.start_pos = start_pos
+    self.trail = trail
+    self.trail_idx = 0
+
+    _obs_dict = {}    
+    _obs_dict["x_r"] = spaces.Box(
+      low=np.array([0, 0,]),
+      high=np.array([width, len(trail)]),
+      shape=(2,),
+      dtype="int64",
+    )
+    _obs_dict["y"] = spaces.Box(
+      low=np.array([0]),
+      high=np.array([height]),
+      shape=(1,),
+      dtype="int64",
+    )
+
+    self.observation_space = spaces.Dict(_obs_dict)
+    self.action_space = spaces.Discrete(len(Actions))
+
+
+  def _reset_grid(self):
+    self.grid = np.zeros((self.height, self.width), dtype=int)
+    # add walls around edges.;w
+    self.grid[0, :self.width] = Entities.wall
+    self.grid[-1, :self.width] = Entities.wall
+    self.grid[:self.height, 0] = Entities.wall
+    self.grid[:self.height, -1] = Entities.wall
+    for h, w in self.trail:
+      self.grid[h, w] = Entities.trail
+    self.grid[self.start_pos[0], self.start_pos[1]] = Entities.agent
+
+  def step(self, action):
+    # first do the action
+    old_pos = self.curr_pos
+    new_pos = self.curr_pos + ACTION_COORDS[action]
+
+    # if agent is out of bounds or inside a wall, revert back.
+    within_bounds =  (0 <= new_pos[0] < self.height) and (0 <= new_pos[1] < self.width)
+    if not within_bounds or (self.grid[new_pos[0], new_pos[1]] == Entities.wall):
+      new_pos = self.curr_pos
+
+    # update the grid
+    self.grid[old_pos[0], old_pos[1]] = Entities.empty
+    self.grid[new_pos[0], new_pos[1]] = Entities.agent
+
+    # update curr_pos for next timestep.
+    self.curr_pos = new_pos
+
+    # Reward computation. check if agent is on the trail.
+    reward = 0
+    if self.trail_idx < len(self.trail) and new_pos[0] == self.trail[self.trail_idx][0] and new_pos[1] == self.trail[self.trail_idx][1]:
+      reward += 1
+      # print('finished trail idx', self.trail_idx)
+      self.trail_idx += 1
+
+    terminated = self.trail_idx >= len(self.trail)
+    # terminated = False
+    truncated = False
+    obs = self.gen_obs()
+    return obs, reward, terminated, truncated, {}
+
+  def gen_obs(self):
+    obs = {
+      "x_r": np.array([self.curr_pos[1], self.trail_idx]),
+      "y": np.array([self.curr_pos[0]])
+    }
+    return obs
+
+  def reset(self, *, seed=None, options=None):
+    self.curr_pos = np.array(self.start_pos)
+    self.trail_idx = 0
+    self._reset_grid()
+    init_obs = self.gen_obs()
+    return init_obs, {}
+
+  @property
+  def ascii(self):
+    """
+    Produce a pretty string of the environment's grid along with the agent.
+    """
+    grid_str = ""
+    ENTITY_TO_STRING = {
+      Entities.empty: " ",
+      Entities.wall: "x",
+      Entities.trail: colorize(".", "blue", highlight=True),
+      Entities.agent: colorize("A", "yellow", highlight=True),
+    }
+    for j in range(self.height):
+      for i in range(self.width):
+        grid_str += ENTITY_TO_STRING[self.grid[j,i]]
+      if j < self.height - 1:
+          grid_str += "\n"
+    return grid_str
+
 if __name__ == "__main__":
   width = height = 6
   start_pos = [1,1]

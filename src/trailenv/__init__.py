@@ -22,6 +22,13 @@ register2(
     kwargs=dict(width=20,height=20,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10], [5,11], [6,12], [7,13], [6,14], [5,15], [4,16],[5,17],[6, 18], [7, 19]])
 )
 
+register2(
+    id="ObsDictTrailEnv-v0",
+    entry_point="trailenv.trail_env:ObsDictTrailEnv",
+    max_episode_steps=100,
+    kwargs=dict(width=12,height=12,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10]])
+)
+
 # register(
 #     id="TrailEnv-v1",
 #     entry_point="trailenv.trail_env:TrailEnv",
