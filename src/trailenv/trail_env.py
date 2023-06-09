@@ -256,13 +256,14 @@ class NoisyFootballEnv(TrailEnv):
     return obs, reward, terminated, {}
 
 class ObsDictTrailEnv(gym.Env):
-  def __init__(self, width, height, start_pos, trail):
+  def __init__(self, width, height, start_pos, trail, observation_type="FO"):
     self.width = width
     self.height = height
     self.start_pos = start_pos
     self.trail = trail
     self.trail_idx = 0
-
+    assert observation_type in ["FO", "PO"]
+    self.observation_type = observation_type
     _obs_dict = {}    
     _obs_dict["x_r"] = spaces.Box(
       low=np.array([0, 0,]),
@@ -270,13 +271,13 @@ class ObsDictTrailEnv(gym.Env):
       shape=(2,),
       dtype="int64",
     )
-    _obs_dict["y"] = spaces.Box(
-      low=np.array([0]),
-      high=np.array([height]),
-      shape=(1,),
-      dtype="int64",
-    )
-
+    if observation_type == "FO":
+      _obs_dict["y"] = spaces.Box(
+        low=np.array([0]),
+        high=np.array([height]),
+        shape=(1,),
+        dtype="int64",
+      )
     self.observation_space = spaces.Dict(_obs_dict)
     self.action_space = spaces.Discrete(len(Actions))
 
@@ -325,8 +326,9 @@ class ObsDictTrailEnv(gym.Env):
   def gen_obs(self):
     obs = {
       "x_r": np.array([self.curr_pos[1], self.trail_idx]),
-      "y": np.array([self.curr_pos[0]])
     }
+    if self.observation_type == "FO":
+      obs["y"] = np.array([self.curr_pos[0]])
     return obs
 
   def reset(self, *, seed=None, options=None):
