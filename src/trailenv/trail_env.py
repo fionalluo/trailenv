@@ -328,7 +328,7 @@ class ObsDictTrailEnv(gym.Env):
     #   "x_r": np.array([self.curr_pos[1], self.trail_idx]),
     # }
     obs = {
-      "x_r": np.array([self.curr_pos[1]]),
+      "x": np.array([self.curr_pos[1]]),
     }
     if self.observation_type == "FO":
       obs["y"] = np.array([self.curr_pos[0]])
