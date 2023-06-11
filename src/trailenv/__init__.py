@@ -40,13 +40,13 @@ register2(
     id="ObsDictTrailEnv-v0",
     entry_point="trailenv.trail_env:ObsDictTrailEnv",
     max_episode_steps=100,
-    kwargs=dict(width=7,height=24,start_pos=[1,1],trail=[[14,2],[20,3],[4,4],[8,5]])
+    kwargs=dict(width=7,height=24,start_pos=[1,1],trail=[[14,2],[2,3],[21,4],[3,5]])
 )
 register2(
     id="POObsDictTrailEnv-v0",
     entry_point="trailenv.trail_env:ObsDictTrailEnv",
     max_episode_steps=100,
-    kwargs=dict(observation_type="PO", width=7,height=100,start_pos=[1,1],trail=[[14,2],[20,3],[4,4],[8,5]])
+    kwargs=dict(observation_type="PO",width=7,height=24,start_pos=[1,1],trail=[[14,2],[2,3],[21,4],[3,5]])
 )
 
 # register(
