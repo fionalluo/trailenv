@@ -265,10 +265,10 @@ class ObsDictTrailEnv(gym.Env):
     assert observation_type in ["FO", "PO"]
     self.observation_type = observation_type
     _obs_dict = {}    
-    _obs_dict["x_r"] = spaces.Box(
-      low=np.array([0, 0,]),
-      high=np.array([width, len(trail)]),
-      shape=(2,),
+    _obs_dict["x"] = spaces.Box(
+      low=np.array([0]),
+      high=np.array([width]),
+      shape=(1,),
       dtype="int64",
     )
     if observation_type == "FO":
@@ -324,8 +324,11 @@ class ObsDictTrailEnv(gym.Env):
     return obs, reward, terminated, truncated, {}
 
   def gen_obs(self):
+    # obs = {
+    #   "x_r": np.array([self.curr_pos[1], self.trail_idx]),
+    # }
     obs = {
-      "x_r": np.array([self.curr_pos[1], self.trail_idx]),
+      "x_r": np.array([self.curr_pos[1]]),
     }
     if self.observation_type == "FO":
       obs["y"] = np.array([self.curr_pos[0]])
