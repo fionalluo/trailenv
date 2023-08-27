@@ -380,7 +380,10 @@ class GridBlindPickEnv(gym.Env):
             high=np.array([height, width]),
             shape=(2,),
             dtype="int64",
-        )
+        ),
+        "log_is_success": spaces.Box(
+            low= -np.inf, high=np.inf, dtype="float32"
+        ),
       }
     )
     self.action_space = spaces.Discrete(len(Actions))
@@ -406,6 +409,11 @@ class GridBlindPickEnv(gym.Env):
     # if at the goal already, stay in absorbing state.
     if np.all(old_pos == self.goal):
       obs = {"robot": np.array([*old_pos, 1],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64")}
+      obs["log_is_success"] = np.zeros((1,), dtype=np.float32)
+      if not self.episodic_success:
+        self.episodic_success = True
+        obs["log_is_success"] = np.ones((1,), dtype=np.float32)
+
       reward = 1
       return obs, reward, terminated, truncated, {}
 
@@ -427,6 +435,10 @@ class GridBlindPickEnv(gym.Env):
     self.curr_pos = new_pos
 
     obs = {"robot": np.array([*self.curr_pos, at_goal],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64")}
+    obs["log_is_success"] = np.zeros((1,), dtype=np.float32)
+    if at_goal and not self.episodic_success:
+      self.episodic_success = True
+      obs["log_is_success"] = np.ones((1,), dtype=np.float32)
 
     return obs, reward, terminated, truncated, {}
 
@@ -435,7 +447,8 @@ class GridBlindPickEnv(gym.Env):
     self.trail_idx = 0
     self._reset_grid()
     at_goal = np.all(self.curr_pos == self.goal)
-    obs = {"robot": np.array([*self.curr_pos, at_goal],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64")}
+    self.episodic_success = at_goal
+    obs = {"robot": np.array([*self.curr_pos, at_goal],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64"), "log_is_success": np.ones((1,), dtype=np.float32) * at_goal}
     return obs, {}
 
   @property
@@ -468,7 +481,7 @@ if __name__ == "__main__":
     key = input("type in wasdqezx")
     if key in KEY_ACTION_MAP:
       obs, rew, terminated, truncated, info = env.step(KEY_ACTION_MAP[key])
-      print("done", done, "| rew", rew)
+      print("is_success", obs["log_is_success"], "| rew", rew)
       print(env.ascii)
 
   # trail = [[2,2], [3,3], [2,4]]
