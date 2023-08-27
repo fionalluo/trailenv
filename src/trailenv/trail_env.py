@@ -370,15 +370,15 @@ class GridBlindPickEnv(gym.Env):
     self.observation_space = spaces.Dict(
       {
         "robot": spaces.Box(
-            low=np.array([0.0, 0.0]), # x, on goal or not.
-            high=np.array([width,1]),
-            shape=(2,),
+            low=np.array([0, 0, 0]), # y, x, on goal or not.
+            high=np.array([height, width, 1]),
+            shape=(3,),
             dtype="int64",
         ),
         "priv_info": spaces.Box(
-            low=np.array([0.0]), #  y
-            high=np.array([height]),
-            shape=(1,),
+            low=np.array([0, 0]), # goal position
+            high=np.array([height, width]),
+            shape=(2,),
             dtype="int64",
         )
       }
@@ -405,7 +405,7 @@ class GridBlindPickEnv(gym.Env):
     terminated = truncated = False
     # if at the goal already, stay in absorbing state.
     if np.all(old_pos == self.goal):
-      obs = {"robot": np.array([old_pos[1], 1],dtype=np.int64), "priv_info": np.array([old_pos[0]], dtype="int64")}
+      obs = {"robot": np.array([*old_pos, 1],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64")}
       reward = 1
       return obs, reward, terminated, truncated, {}
 
@@ -426,7 +426,7 @@ class GridBlindPickEnv(gym.Env):
     # update curr_pos for next timestep.
     self.curr_pos = new_pos
 
-    obs = {"robot": np.array([self.curr_pos[1], at_goal],dtype=np.int64), "priv_info": np.array([self.curr_pos[0]], dtype="int64")}
+    obs = {"robot": np.array([*self.curr_pos, at_goal],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64")}
 
     return obs, reward, terminated, truncated, {}
 
@@ -435,7 +435,7 @@ class GridBlindPickEnv(gym.Env):
     self.trail_idx = 0
     self._reset_grid()
     at_goal = np.all(self.curr_pos == self.goal)
-    obs = {"robot": np.array([self.curr_pos[1], at_goal],dtype=np.int64), "priv_info": np.array([self.curr_pos[0]], dtype="int64")}
+    obs = {"robot": np.array([*self.curr_pos, at_goal],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64")}
     return obs, {}
 
   @property
@@ -458,8 +458,8 @@ class GridBlindPickEnv(gym.Env):
     return grid_str
 
 if __name__ == "__main__":
-  width = height = 29 + 2
-  start_pos = [15,15]
+  width = height = 7 + 2
+  start_pos = [4, 4]
   env = GridBlindPickEnv(width, height, start_pos)
   env.reset()
   print(env.ascii)
