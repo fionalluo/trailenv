@@ -396,9 +396,15 @@ class GridBlindPickEnv(gym.Env):
     self.grid[-1, :self.width] = Entities.wall
     self.grid[:self.height, 0] = Entities.wall
     self.grid[:self.height, -1] = Entities.wall
-    self.goal = [np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)]
+    self.goal = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
     self.grid[self.goal[0],  self.goal[1]] = Entities.trail
-    self.grid[self.start_pos[0], self.start_pos[1]] = Entities.agent
+    for _ in range(100):
+      self.start = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
+      if np.all(self.start == self.goal):
+        continue
+      self.grid[self.start[0], self.start[1]] = Entities.agent
+      self.start_pos = self.start
+      break
 
   def step(self, action):
     # first do the action
@@ -443,9 +449,9 @@ class GridBlindPickEnv(gym.Env):
     return obs, reward, terminated, truncated, {}
 
   def reset(self, *, seed=None, options=None):
-    self.curr_pos = np.array(self.start_pos)
     self.trail_idx = 0
     self._reset_grid()
+    self.curr_pos = np.array(self.start_pos)
     at_goal = np.all(self.curr_pos == self.goal)
     self.episodic_success = at_goal
     obs = {"robot": np.array([*self.curr_pos, at_goal],dtype=np.int64), "priv_info": np.array(self.goal, dtype="int64"), "log_is_success": np.ones((1,), dtype=np.float32) * at_goal}
