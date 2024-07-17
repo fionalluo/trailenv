@@ -361,7 +361,7 @@ class ObsDictTrailEnv(gym.Env):
     return grid_str
 
 class GridBlindPickEnv(gym.Env):
-  def __init__(self, width, height, start_pos):
+  def __init__(self, width, height, start_pos, curriculum=1, threshold=0.5):
     self.width = width
     self.height = height
     self.start_pos = start_pos # should be at center somewhere.
@@ -387,9 +387,21 @@ class GridBlindPickEnv(gym.Env):
       }
     )
     self.action_space = spaces.Discrete(len(Actions))
+    self.curriculum = 1
+    self.max_curriculum = curriculum
+    self.last_10_successes = []
+    self.threshold = threshold
+    self.reward = 0
 
 
   def _reset_grid(self):
+    # Check if we need to increase curriculum
+    self.last_10_successes.append(self.reward >= 1)
+    if len(self.last_10_successes) > 10:
+      self.last_10_successes = self.last_10_successes[1:]
+    if sum(self.last_10_successes) / 10 >= self.threshold:
+      self.curriculum += 1
+
     self.grid = np.zeros((self.height, self.width), dtype=int)
     # add walls around edges.;w
     self.grid[0, :self.width] = Entities.wall
@@ -398,8 +410,17 @@ class GridBlindPickEnv(gym.Env):
     self.grid[:self.height, -1] = Entities.wall
     self.goal = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
     self.grid[self.goal[0],  self.goal[1]] = Entities.trail
+
     for _ in range(100):
-      self.start = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
+      if self.curriculum < self.max_curriculum:
+        dw = int(self.curriculum * self.width / 2 / self.max_curriculum)
+        dh = int(self.curriculum * self.height / 2 / self.max_curriculum)
+        self.start = np.array([np.random.randint(self.goal[0] - dw, self.goal[0] + dw),  
+                               np.random.randint(self.goal[1] - dh, self.goal[1] + dh)])
+        self.start = np.array([np.clip(self.start[0], 1, self.width - 1),
+                               np.clip(self.start[1], 1, self.height - 1)])
+      else:
+        self.start = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
       if np.all(self.start == self.goal):
         continue
       self.grid[self.start[0], self.start[1]] = Entities.agent
@@ -411,6 +432,7 @@ class GridBlindPickEnv(gym.Env):
     old_pos = self.curr_pos
     new_pos = self.curr_pos + ACTION_COORDS[action]
     reward = 0
+    self.reward = 0
     terminated = truncated = False
     # if at the goal already, stay in absorbing state.
     if np.all(old_pos == self.goal):
@@ -421,6 +443,7 @@ class GridBlindPickEnv(gym.Env):
         obs["log_is_success"] = np.ones((1,), dtype=np.float32)
 
       reward = 1
+      self.reward = 1
       return obs, reward, terminated, truncated, {}
 
     # if agent is out of bounds or inside a wall, revert back.
@@ -477,9 +500,13 @@ class GridBlindPickEnv(gym.Env):
     return grid_str
 
 if __name__ == "__main__":
-  width = height = 7 + 2
+  width = height = 29 + 2
   start_pos = [4, 4]
-  env = GridBlindPickEnv(width, height, start_pos)
+  env = GridBlindPickEnv(width, height, start_pos, curriculum=10)
+  while True:
+    env.reset()
+    print(env.ascii)
+
   env.reset()
   print(env.ascii)
   done = False

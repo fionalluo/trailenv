@@ -42,6 +42,16 @@ register2(
     kwargs=dict(width=15,height=15,start_pos=[15,15])
 )
 
+for curriculum in [2, 3, 4, 5, 10]:
+    for dim in [7, 15, 31]:
+        for threshold in [0.5, 0.9]:
+            register2(
+                id=f"GridBlindPick{dim}x{dim}EnvC{curriculum}Threshold{threshold}-v0",
+                entry_point="trailenv.trail_env:GridBlindPickEnv",
+                max_episode_steps=100,
+                kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold)
+            )
+
 # register2(
 #     id="ObsDictTrailEnv-v0",
 #     entry_point="trailenv.trail_env:ObsDictTrailEnv",
