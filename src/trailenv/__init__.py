@@ -44,7 +44,7 @@ register2(
 
 for curriculum in [2, 3, 4, 5, 10]:
     for dim in [7, 15, 31]:
-        for threshold in [0.5, 0.9]:
+        for threshold in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
             register2(
                 id=f"GridBlindPick{dim}x{dim}EnvC{curriculum}Threshold{threshold}-v0",
                 entry_point="trailenv.trail_env:GridBlindPickEnv",

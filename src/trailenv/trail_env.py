@@ -389,18 +389,21 @@ class GridBlindPickEnv(gym.Env):
     self.action_space = spaces.Discrete(len(Actions))
     self.curriculum = 1
     self.max_curriculum = curriculum
-    self.last_10_successes = []
+    self.last_successes = []
+    self.max_successes = 20
     self.threshold = threshold
     self.reward = 0
 
 
   def _reset_grid(self):
     # Check if we need to increase curriculum
-    self.last_10_successes.append(self.reward >= 1)
-    if len(self.last_10_successes) > 10:
-      self.last_10_successes = self.last_10_successes[1:]
-    if sum(self.last_10_successes) / 10 >= self.threshold:
+    self.last_successes.append(self.reward >= 1)
+    if len(self.last_successes) > self.max_successes:
+      self.last_successes = self.last_successes[1:]
+    if self.curriculum < self.max_curriculum and sum(self.last_successes) / self.max_successes >= self.threshold:
       self.curriculum += 1
+      self.last_successes = []
+    self.reward = 0
 
     self.grid = np.zeros((self.height, self.width), dtype=int)
     # add walls around edges.;w
@@ -417,8 +420,8 @@ class GridBlindPickEnv(gym.Env):
         dh = int(self.curriculum * self.height / 2 / self.max_curriculum)
         self.start = np.array([np.random.randint(self.goal[0] - dw, self.goal[0] + dw),  
                                np.random.randint(self.goal[1] - dh, self.goal[1] + dh)])
-        self.start = np.array([np.clip(self.start[0], 1, self.width - 1),
-                               np.clip(self.start[1], 1, self.height - 1)])
+        self.start = np.array([np.clip(self.start[0], 1, self.width - 2),
+                               np.clip(self.start[1], 1, self.height - 2)])
       else:
         self.start = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
       if np.all(self.start == self.goal):
@@ -426,13 +429,20 @@ class GridBlindPickEnv(gym.Env):
       self.grid[self.start[0], self.start[1]] = Entities.agent
       self.start_pos = self.start
       break
+    
+    # def print_to_file(file_path, message):
+    #   with open(file_path, 'a') as file:
+    #       file.write(message + '\n')
+        
+    # message = f"In reset: Curriculum: {self.curriculum}/{self.max_curriculum}. Last successes: {self.last_successes}"
+    # print_to_file('/home/harsh/fiona/dreamerv3/test_log.txt', message)
+    # print_to_file('/home/harsh/fiona/dreamerv3/test_log.txt', self.text)
 
   def step(self, action):
     # first do the action
     old_pos = self.curr_pos
     new_pos = self.curr_pos + ACTION_COORDS[action]
     reward = 0
-    self.reward = 0
     terminated = truncated = False
     # if at the goal already, stay in absorbing state.
     if np.all(old_pos == self.goal):
@@ -443,7 +453,7 @@ class GridBlindPickEnv(gym.Env):
         obs["log_is_success"] = np.ones((1,), dtype=np.float32)
 
       reward = 1
-      self.reward = 1
+      self.reward += 1
       return obs, reward, terminated, truncated, {}
 
     # if agent is out of bounds or inside a wall, revert back.
@@ -491,6 +501,26 @@ class GridBlindPickEnv(gym.Env):
       Entities.wall: "x",
       Entities.trail: colorize(".", "blue", highlight=True),
       Entities.agent: colorize("A", "yellow", highlight=True),
+    }
+    for j in range(self.height):
+      for i in range(self.width):
+        grid_str += ENTITY_TO_STRING[self.grid[j,i]]
+      if j < self.height - 1:
+          grid_str += "\n"
+    return grid_str
+  
+  @property
+  def text(self):
+    """
+    Produce a pretty string of the environment's grid along with the agent.
+    Without colors, for printing to a text file
+    """
+    grid_str = ""
+    ENTITY_TO_STRING = {
+      Entities.empty: " ",
+      Entities.wall: "x",
+      Entities.trail: ".",
+      Entities.agent: "A",
     }
     for j in range(self.height):
       for i in range(self.width):
