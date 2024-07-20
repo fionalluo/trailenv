@@ -361,11 +361,19 @@ class ObsDictTrailEnv(gym.Env):
     return grid_str
 
 class GridBlindPickEnv(gym.Env):
-  def __init__(self, width, height, start_pos, curriculum=1, threshold=0.5):
+  def __init__(self, width, height, start_pos, curriculum=1, threshold=0.5, centered=False):
     self.width = width
     self.height = height
     self.start_pos = start_pos # should be at center somewhere.
     self.goal = [0, 0]
+
+    self.curriculum = 1
+    self.max_curriculum = curriculum
+    self.last_successes = []
+    self.max_successes = 5
+    self.threshold = threshold
+    self.reward = 0
+    self.centered = centered
 
     self.observation_space = spaces.Dict(
       {
@@ -387,17 +395,15 @@ class GridBlindPickEnv(gym.Env):
       }
     )
     self.action_space = spaces.Discrete(len(Actions))
-    self.curriculum = 1
-    self.max_curriculum = curriculum
-    self.last_successes = []
-    self.max_successes = 20
-    self.threshold = threshold
-    self.reward = 0
 
+  def print_to_file(self, message):
+    file_path = '/home/harsh/fiona/dreamerv3/test_log.txt'
+    with open(file_path, 'a') as file:
+        file.write(message + '\n')
 
   def _reset_grid(self):
     # Check if we need to increase curriculum
-    self.last_successes.append(self.reward >= 1)
+    self.last_successes.append(self.reward > 0)
     if len(self.last_successes) > self.max_successes:
       self.last_successes = self.last_successes[1:]
     if self.curriculum < self.max_curriculum and sum(self.last_successes) / self.max_successes >= self.threshold:
@@ -406,42 +412,68 @@ class GridBlindPickEnv(gym.Env):
     self.reward = 0
 
     self.grid = np.zeros((self.height, self.width), dtype=int)
-    # add walls around edges.;w
+    # Add walls around edges.
     self.grid[0, :self.width] = Entities.wall
     self.grid[-1, :self.width] = Entities.wall
     self.grid[:self.height, 0] = Entities.wall
     self.grid[:self.height, -1] = Entities.wall
-    self.goal = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
+    # Set goal position
+    if self.centered:
+      dw = int(self.curriculum * self.width / 2 / self.max_curriculum)
+      dh = int(self.curriculum * self.height / 2 / self.max_curriculum)
+      dw, dh = max(2, dw), max(2, dh)
+      # Uncomment to add walls around the curriculum
+      # self.grid[self.height // 2 - dh, :self.width] = Entities.wall
+      # self.grid[self.height // 2 + dh - 1, :self.width] = Entities.wall
+      # self.grid[:self.height, self.width // 2 - dw] = Entities.wall
+      # self.grid[:self.height, self.width // 2 + dw - 1] = Entities.wall
+      while True:
+        # Sample a goal position based on curriculum
+        if self.curriculum < self.max_curriculum:
+          self.goal = np.array([np.random.randint(self.width // 2 - dw + 1, self.width // 2 + dw - 1),  
+                                np.random.randint(self.height // 2 - dh + 1, self.height // 2 + dh - 1)])
+          self.goal = np.array([np.clip(self.goal[0], 1, self.width - 2),
+                                np.clip(self.goal[1], 1, self.height - 2)])
+          # self.goal = np.array([np.clip(self.goal[0], self.width // 2 - dw + 1, self.width // 2 + dw - 1),
+          #                       np.clip(self.goal[1], self.height // 2 - dh + 1, self.height // 2 + dh - 1)])
+        else:
+          self.goal = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
+        if not np.all(self.goal == self.start_pos): # break condition
+          break
+        print(self.goal)
+    else:
+      self.goal = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
     self.grid[self.goal[0],  self.goal[1]] = Entities.trail
 
+    # Set agent position
     for _ in range(100):
-      if self.curriculum < self.max_curriculum:
-        dw = int(self.curriculum * self.width / 2 / self.max_curriculum)
-        dh = int(self.curriculum * self.height / 2 / self.max_curriculum)
-        self.start = np.array([np.random.randint(self.goal[0] - dw, self.goal[0] + dw),  
-                               np.random.randint(self.goal[1] - dh, self.goal[1] + dh)])
-        self.start = np.array([np.clip(self.start[0], 1, self.width - 2),
-                               np.clip(self.start[1], 1, self.height - 2)])
+      if self.centered:
+        self.start = np.array(self.start_pos)
       else:
-        self.start = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
+        if self.curriculum < self.max_curriculum:
+          dw = int(self.curriculum * self.width / 2 / self.max_curriculum)
+          dh = int(self.curriculum * self.height / 2 / self.max_curriculum)
+          self.start = np.array([np.random.randint(self.goal[0] - dw, self.goal[0] + dw - 1),  
+                                np.random.randint(self.goal[1] - dh, self.goal[1] + dh - 1)])
+          self.start = np.array([np.clip(self.start[0], 1, self.width - 2),
+                                np.clip(self.start[1], 1, self.height - 2)])
+        else:
+          self.start = np.array([np.random.randint(1, self.height-1),  np.random.randint(1, self.width-1)])
       if np.all(self.start == self.goal):
         continue
       self.grid[self.start[0], self.start[1]] = Entities.agent
       self.start_pos = self.start
       break
-    
-    # def print_to_file(file_path, message):
-    #   with open(file_path, 'a') as file:
-    #       file.write(message + '\n')
         
-    # message = f"In reset: Curriculum: {self.curriculum}/{self.max_curriculum}. Last successes: {self.last_successes}"
-    # print_to_file('/home/harsh/fiona/dreamerv3/test_log.txt', message)
-    # print_to_file('/home/harsh/fiona/dreamerv3/test_log.txt', self.text)
+    message = f"In reset: Curriculum: {self.curriculum}/{self.max_curriculum}. Last successes: {self.last_successes}"
+    # self.print_to_file(message)
+    # self.print_to_file(self.text)
 
   def step(self, action):
     # first do the action
     old_pos = self.curr_pos
     new_pos = self.curr_pos + ACTION_COORDS[action]
+    # self.print_to_file(str(new_pos))
     reward = 0
     terminated = truncated = False
     # if at the goal already, stay in absorbing state.
@@ -453,7 +485,6 @@ class GridBlindPickEnv(gym.Env):
         obs["log_is_success"] = np.ones((1,), dtype=np.float32)
 
       reward = 1
-      self.reward += 1
       return obs, reward, terminated, truncated, {}
 
     # if agent is out of bounds or inside a wall, revert back.
@@ -479,6 +510,7 @@ class GridBlindPickEnv(gym.Env):
       self.episodic_success = True
       obs["log_is_success"] = np.ones((1,), dtype=np.float32)
 
+    self.reward += reward
     return obs, reward, terminated, truncated, {}
 
   def reset(self, *, seed=None, options=None):
@@ -530,9 +562,9 @@ class GridBlindPickEnv(gym.Env):
     return grid_str
 
 if __name__ == "__main__":
-  width = height = 29 + 2
-  start_pos = [4, 4]
-  env = GridBlindPickEnv(width, height, start_pos, curriculum=10)
+  width = height = 31
+  start_pos = [width // 2, height // 2]
+  env = GridBlindPickEnv(width, height, start_pos, curriculum=3, centered=True)
   while True:
     env.reset()
     print(env.ascii)
