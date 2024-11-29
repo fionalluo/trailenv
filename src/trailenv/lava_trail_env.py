@@ -88,6 +88,7 @@ class LavaTrailEnv(gym.Env):
     self.observation_space = spaces.Dict({
       "distance": spaces.Box(low=0, high=size * 2, shape=(), dtype=np.int32),  # Manhattan distance
       "neighbors": spaces.MultiBinary([4, len(Entities)]),  # One-hot encoded neighbors
+      "neighbors_unprivileged": spaces.MultiBinary([4, len(Entities)]),  # One-hot encoded. Lava and trail appear the same
       "last_action": spaces.MultiBinary(len(Actions)),  # One-hot encoded last action
     })
 
@@ -118,6 +119,9 @@ class LavaTrailEnv(gym.Env):
     self.grid[size - self.margin, size // 2] = Entities.agent
   
   def _set_trail(self):
+    # Set trail seed
+    random.seed(self.trail_seed)
+
     # Start and end positions
     start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1]
     end_row, end_col = self.target_pos[0] + 1, self.target_pos[1]
@@ -188,11 +192,12 @@ class LavaTrailEnv(gym.Env):
     # Reward computation. check if agent is on the trail.
     reward = 0
     terminated = False
-    curr_cell = self.grid[new_pos[0], new_pos[1]]
+    curr_cell = self.initial_grid[new_pos[0], new_pos[1]]
+    self.visited_trail.add(tuple(new_pos))
+
     if curr_cell == Entities.trail:
       if tuple(new_pos) not in self.visited_trail:
         reward = 0.5
-        self.visited_trail.add(tuple(new_pos))
       else:
         reward = -0.5
     elif curr_cell == Entities.target:
@@ -228,6 +233,15 @@ class LavaTrailEnv(gym.Env):
     neighbors = np.zeros((4, len(Entities)), dtype=np.int32)
     for i, entity in enumerate(neighbors_raw):
         neighbors[i, entity] = 1  # One-hot encode the neighbor type
+    
+    # Get neighbors where lava and trail are the same (both marked)
+    neighbors_unprivileged = np.zeros((4, len(Entities)), dtype=np.int32)
+    for i, entity in enumerate(neighbors_raw):
+      if entity == Entities.lava or entity == Entities.trail:
+        neighbors_unprivileged[i, Entities.lava] = 1
+        neighbors_unprivileged[i, Entities.trail] = 1
+      else:
+        neighbors_unprivileged[i, entity] = 1
 
     # One-hot encode the last action
     last_action = np.zeros(len(Actions), dtype=np.int32)
@@ -238,6 +252,7 @@ class LavaTrailEnv(gym.Env):
     obs = {
         "distance": distance,
         "neighbors": neighbors,
+        "neighbors_unprivileged": neighbors_unprivileged,
         "last_action": last_action
     }
     return obs
@@ -257,15 +272,41 @@ class LavaTrailEnv(gym.Env):
       Entities.lava: colorize("■", "red"),
       Entities.target: colorize("■", "green"),
     }
-
     for j in range(self.size):
       for i in range(self.size):
-        grid_str += ENTITY_TO_STRING[self.grid[j,i]]
+        if self.grid[j,i] == Entities.trail and (j,i) in self.visited_trail:
+          grid_str += colorize("■", "cyan") # visited trail on the trail is cyan
+        elif self.grid[j, i] != Entities.agent and (j, i) in self.visited_trail:
+          grid_str += colorize("■", "magenta") # visited trail anywhere else is magenta
+        else:
+          grid_str += ENTITY_TO_STRING[self.grid[j,i]]
       if j < self.size - 1:
           grid_str += "\n"
           
     return grid_str
 
+  @property
+  def ascii_initial(self):
+    """
+    Produce a pretty string of the environment's initial grid along with the agent.
+    """
+    grid_str = ""
+
+    ENTITY_TO_STRING = {
+      Entities.empty: colorize("■", "white"),
+      Entities.wall: colorize("■", "gray"),
+      Entities.trail: colorize("■", "blue"),
+      Entities.agent: colorize("■", "yellow"),
+      Entities.lava: colorize("■", "red"),
+      Entities.target: colorize("■", "green"),
+    }
+    for j in range(self.size):
+      for i in range(self.size):
+        grid_str += ENTITY_TO_STRING[self.initial_grid[j,i]]
+      if j < self.size - 1:
+          grid_str += "\n"
+          
+    return grid_str
 
 if __name__ == "__main__":
   size = height = 32
