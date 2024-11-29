@@ -1,3 +1,4 @@
+from copy import deepcopy
 from enum import IntEnum
 import random
 
@@ -28,11 +29,11 @@ KEY_ACTION_MAP = {
 
 class Entities(IntEnum):
   empty = 0
-  lava = 1
-  trail = 2
-  agent = 3
-  target = 4
-  wall = 5
+  trail = 1
+  agent = 2
+  target = 3
+  wall = 4
+  lava = 5
 
 """A set of common utilities used within the environments."""
 
@@ -90,7 +91,7 @@ class LavaTrailEnv(gym.Env):
       "last_action": spaces.MultiBinary(len(Actions)),  # One-hot encoded last action
     })
 
-    self.action_space = spaces.MultiBinary(len(Actions))
+    self.action_space = spaces.Discrete(len(Actions))
   
   def _reset_grid(self):
     self.grid = np.zeros((self.size, self.size), dtype=int)
@@ -104,16 +105,17 @@ class LavaTrailEnv(gym.Env):
     self.grid[self.margin - 1, size // 2] = Entities.target
     self.target_pos = np.array([self.margin - 1, size // 2])
 
-    # Make a copy of the initial grid for resetting states when the agent moves
-    self.initial_grid = self.grid.copy()
-
-    # Set robot position (center bottom, below lava)
-    self.grid[size - self.margin, size // 2] = Entities.agent
     self.robot_pos = np.array([size - self.margin, size // 2])
 
     # Set trail
     self._set_trail()
     self.visited_trail = set()  # set of visited trail positions
+
+    # Make a copy of the initial grid for resetting states when the agent moves
+    self.initial_grid = deepcopy(self.grid)
+
+    # Set robot position (center bottom, below lava)
+    self.grid[size - self.margin, size // 2] = Entities.agent
   
   def _set_trail(self):
     # Start and end positions
@@ -186,7 +188,7 @@ class LavaTrailEnv(gym.Env):
     # Reward computation. check if agent is on the trail.
     reward = 0
     terminated = False
-    curr_cell = self.initial_grid[new_pos[0], new_pos[1]]
+    curr_cell = self.grid[new_pos[0], new_pos[1]]
     if curr_cell == Entities.trail:
       if tuple(new_pos) not in self.visited_trail:
         reward = 0.5
@@ -268,16 +270,18 @@ class LavaTrailEnv(gym.Env):
 if __name__ == "__main__":
   size = height = 32
   env = LavaTrailEnv(size, trail_seed=0)
-  env.reset()
-  print(env.ascii)
-  exit()
+  # env.reset()
+  # print(env.ascii)
+  # exit()
 
+  # Interactive mode
   env.reset()
   print(env.ascii)
   done = False
   while not done:
-    key = input("type in wasdqezx")
+    key = input("type in wasd")
     if key in KEY_ACTION_MAP:
       obs, rew, terminated, truncated, info = env.step(KEY_ACTION_MAP[key])
-      print("is_success", obs["log_is_success"], "| rew", rew)
+      print("rew", rew)
+      print("obs", obs)
       print(env.ascii)
