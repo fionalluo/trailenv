@@ -39,17 +39,23 @@ register2(
     id="GridBlindPick31x31Env-v0",
     entry_point="trailenv.trail_env:GridBlindPickEnv",
     max_episode_steps=100,
-    kwargs=dict(width=15,height=15,start_pos=[15,15])
+    kwargs=dict(width=31,height=31,start_pos=[15,15])
 )
 
+# Centered
 register2(
     id="GridBlindPick31x31EnvCenter-v0",
     entry_point="trailenv.trail_env:GridBlindPickEnv",
     max_episode_steps=100,
     kwargs=dict(width=31,height=31,start_pos=[15,15],centered=True)
 )
-
-for curriculum in [2, 3, 4, 5, 10]:
+register2(
+    id="GridBlindPick100x100EnvCenter-v0",
+    entry_point="trailenv.trail_env:GridBlindPickEnv",
+    max_episode_steps=100,
+    kwargs=dict(width=100,height=100,start_pos=[50,50],centered=True)
+)
+for curriculum in [2, 3, 4, 5, 10, 15, 50]:
     for dim in [7, 15, 31, 100]:
         for threshold in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
             register2(
@@ -58,8 +64,7 @@ for curriculum in [2, 3, 4, 5, 10]:
                 max_episode_steps=100,
                 kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold)
             )
-
-for curriculum in [2, 3, 4, 5, 10]:
+for curriculum in [2, 3, 4, 5, 10, 15, 50]:
     for dim in [7, 15, 31, 100]:
         for threshold in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
             register2(
@@ -68,6 +73,15 @@ for curriculum in [2, 3, 4, 5, 10]:
                 max_episode_steps=100,
                 kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold, centered=True)
             )
+# Register Lava Trail Envs
+for size in [16, 32, 64, 128]:
+    for seed in range(10):
+        register2(
+            id=f"LavaTrail{size}x{size}Seed{seed}-v0",
+            entry_point="trailenv.lava_trail_env:LavaTrailEnv",
+            max_episode_steps=100,
+            kwargs=dict(size=size, trail_seed=seed)
+        )
 
 # register2(
 #     id="ObsDictTrailEnv-v0",
