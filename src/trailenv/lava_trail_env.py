@@ -87,9 +87,13 @@ class LavaTrailEnv(gym.Env):
     # Define observation space
     self.observation_space = spaces.Dict({
       "distance": spaces.Box(low=0, high=size * 2, shape=(), dtype=np.int32),  # Manhattan distance
-      "neighbors": spaces.MultiBinary([4, len(Entities)]),  # One-hot encoded neighbors
-      "neighbors_unprivileged": spaces.MultiBinary([4, len(Entities)]),  # One-hot encoded. Lava and trail appear the same
-      "last_action": spaces.MultiBinary(len(Actions)),  # One-hot encoded last action
+      "neighbors": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded
+      "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded. Lava and trail appear the same
+      "last_action": spaces.Box(low=0, high=1, shape=(len(Actions),), dtype=np.int32),  # One-hot encoded last action
+      # Multibinary is not compatible with dreamer...?
+      # "neighbors": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded neighbors
+      # "neighbors_unprivileged": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded. Lava and trail appear the same
+      # "last_action": spaces.MultiBinary(len(Actions)),  # One-hot encoded last action
     })
 
     self.action_space = spaces.Discrete(len(Actions))
@@ -180,7 +184,7 @@ class LavaTrailEnv(gym.Env):
     # if agent is out of bounds or inside a wall, revert back.
     within_bounds =  (0 <= new_pos[0] < self.size) and (0 <= new_pos[1] < self.size)
     if not within_bounds or (self.grid[new_pos[0], new_pos[1]] == Entities.wall):
-      new_pos = self.curr_pos
+      new_pos = old_pos
 
     # update the grid
     self.grid[old_pos[0], old_pos[1]] = self.initial_grid[old_pos[0], old_pos[1]]
@@ -230,18 +234,18 @@ class LavaTrailEnv(gym.Env):
 
     # Get neighbors and one-hot encode them
     neighbors_raw = self._get_neighbors()
-    neighbors = np.zeros((4, len(Entities)), dtype=np.int32)
+    neighbors = np.zeros((4 * len(Entities),), dtype=np.int32)
     for i, entity in enumerate(neighbors_raw):
-        neighbors[i, entity] = 1  # One-hot encode the neighbor type
+        neighbors[len(Entities) * i + entity] = 1  # One-hot encode the neighbor type
     
     # Get neighbors where lava and trail are the same (both marked)
-    neighbors_unprivileged = np.zeros((4, len(Entities)), dtype=np.int32)
+    neighbors_unprivileged = np.zeros((4 * len(Entities),), dtype=np.int32)
     for i, entity in enumerate(neighbors_raw):
       if entity == Entities.lava or entity == Entities.trail:
-        neighbors_unprivileged[i, Entities.lava] = 1
-        neighbors_unprivileged[i, Entities.trail] = 1
+        neighbors_unprivileged[len(Entities) * i + Entities.lava] = 1
+        neighbors_unprivileged[len(Entities) * i + Entities.trail] = 1
       else:
-        neighbors_unprivileged[i, entity] = 1
+        neighbors_unprivileged[len(Entities) * i + entity] = 1
 
     # One-hot encode the last action
     last_action = np.zeros(len(Actions), dtype=np.int32)
@@ -255,6 +259,13 @@ class LavaTrailEnv(gym.Env):
         "neighbors_unprivileged": neighbors_unprivileged,
         "last_action": last_action
     }
+
+    # Assert the correct shapes
+    assert obs["distance"].shape == ()
+    assert obs["neighbors"].shape == (4 * len(Entities),)
+    assert obs["neighbors_unprivileged"].shape == (4 * len(Entities),)
+    assert obs["last_action"].shape == (len(Actions),)
+
     return obs
   
   @property
