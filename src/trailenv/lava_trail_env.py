@@ -148,7 +148,13 @@ class LavaTrailEnv(gym.Env):
             if (
                 self.margin + 1 <= next_row < self.size - self.margin - 1
                 and self.margin + 1 < next_col < self.size - self.margin - 1
-                and self.grid[next_row, next_col] != Entities.trail
+                and self.grid[next_row, next_col] != Entities.# The `trail` in the `LavaTrailEnv`
+                # environment is a path that is
+                # generated for the agent to follow from
+                # its starting position to the target
+                # position. Here is an overview of what
+                # the `trail` does in the environment:
+                trail
             ):
                 current_row, current_col = next_row, next_col
                 self.grid[current_row, current_col] = Entities.trail
@@ -197,7 +203,6 @@ class LavaTrailEnv(gym.Env):
     reward = 0
     terminated = False
     curr_cell = self.initial_grid[new_pos[0], new_pos[1]]
-    self.visited_trail.add(tuple(new_pos))
 
     if curr_cell == Entities.trail:
       if tuple(new_pos) not in self.visited_trail:
@@ -210,6 +215,7 @@ class LavaTrailEnv(gym.Env):
     elif curr_cell == Entities.lava:
       reward = -0.1
 
+    self.visited_trail.add(tuple(new_pos))
     truncated = False
     obs = self.gen_obs()
     return obs, reward, terminated, truncated, {}
