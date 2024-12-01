@@ -309,9 +309,9 @@ class LavaTrailEnv(gym.Env):
     for i in range(self.size):
       for j in range(self.size):
         entity = self.grid[i, j]
-        if (i, j) in self.visited_trail:
+        if entity != Entities.agent and (i, j) in self.visited_trail:
           # Darken the trail if it was visited
-          img[i, j] = np.array(ENTITY_COLORS[Entities.trail]) * 0.7
+          img[i, j] = np.array(ENTITY_COLORS[entity]) * 0.7
         else:
           img[i, j] = ENTITY_COLORS[entity]
 
