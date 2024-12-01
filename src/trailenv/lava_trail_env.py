@@ -86,7 +86,7 @@ class LavaTrailEnv(gym.Env):
 
     # Define observation space
     self.observation_space = spaces.Dict({
-      "distance": spaces.Box(low=0, high=size * 2, shape=(), dtype=np.int32),  # Manhattan distance
+      "distance": spaces.Box(low=0, high=size * 2, shape=(1,), dtype=np.int32),  # Manhattan distance
       "neighbors": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded
       "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded. Lava and trail appear the same
       "last_action": spaces.Box(low=0, high=1, shape=(len(Actions),), dtype=np.int32),  # One-hot encoded last action
@@ -237,6 +237,7 @@ class LavaTrailEnv(gym.Env):
   def gen_obs(self):
     # Compute Manhattan distance to the target
     distance = self._manhattan_distance()
+    distance = np.array([distance], dtype=np.int32)
 
     # Get neighbors and one-hot encode them
     neighbors_raw = self._get_neighbors()
@@ -267,7 +268,7 @@ class LavaTrailEnv(gym.Env):
     }
 
     # Assert the correct shapes
-    assert obs["distance"].shape == ()
+    assert obs["distance"].shape == (1,)
     assert obs["neighbors"].shape == (4 * len(Entities),)
     assert obs["neighbors_unprivileged"].shape == (4 * len(Entities),)
     assert obs["last_action"].shape == (len(Actions),)
