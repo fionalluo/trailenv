@@ -5,6 +5,7 @@ import random
 import numpy as np
 from gymnasium import spaces
 import gymnasium as gym
+import cv2
 
 
 class Actions(IntEnum):
@@ -90,6 +91,8 @@ class LavaTrailEnv(gym.Env):
       "neighbors": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded
       "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded. Lava and trail appear the same
       "last_action": spaces.Box(low=0, high=1, shape=(len(Actions),), dtype=np.int32),  # One-hot encoded last action
+      "image": spaces.Box(low=0, high=255, shape=(self.size, self.size, 3), dtype=np.uint8),  # RGB image of the grid
+      "large_image": spaces.Box(low=0, high=255, shape=(self.size * 20, self.size * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
       # Multibinary is not compatible with dreamer...?
       # "neighbors": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded neighbors
       # "neighbors_unprivileged": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded. Lava and trail appear the same
@@ -218,6 +221,12 @@ class LavaTrailEnv(gym.Env):
     self.visited_trail.add(tuple(new_pos))
     truncated = False
     obs = self.gen_obs()
+
+    # # Show the grid image in a separate window using OpenCV
+    # grid_image = obs["large_image"]  # Get the grid image from observation
+    # cv2.imshow("Lava Trail Environment", grid_image)  # Display the image
+    # cv2.waitKey(1)  # Wait for a key press for 1 ms, to update the window
+    
     return obs, reward, terminated, truncated, {}
   
   def _manhattan_distance(self):
@@ -258,13 +267,19 @@ class LavaTrailEnv(gym.Env):
     last_action = np.zeros(len(Actions), dtype=np.int32)
     if hasattr(self, "last_action"):
         last_action[self.last_action] = 1
+    
+    # Render the grid as an image
+    image = self.render_as_image()
+    large_image = self.render_as_large_image()
 
     # Combine into the observation dictionary
     obs = {
         "distance": distance,
         "neighbors": neighbors,
         "neighbors_unprivileged": neighbors_unprivileged,
-        "last_action": last_action
+        "last_action": last_action,
+        "image": image,
+        "large_image": large_image,
     }
 
     # Assert the correct shapes
@@ -272,8 +287,82 @@ class LavaTrailEnv(gym.Env):
     assert obs["neighbors"].shape == (4 * len(Entities),)
     assert obs["neighbors_unprivileged"].shape == (4 * len(Entities),)
     assert obs["last_action"].shape == (len(Actions),)
+    assert obs["image"].shape == (self.size, self.size, 3)
+    assert obs["large_image"].shape == (self.size * 20, self.size * 20, 3)
 
     return obs
+
+  def render_as_image(self):
+    # Generate an image of the grid with visited trail as darker
+    img = np.zeros((self.size, self.size, 3), dtype=np.uint8)
+    
+    ENTITY_COLORS = {
+      Entities.empty: [255, 255, 255],  # White
+      Entities.wall: [128, 128, 128],   # Gray
+      Entities.trail: [0, 0, 255],      # Blue
+      Entities.agent: [255, 255, 0],    # Yellow
+      Entities.lava: [255, 0, 0],       # Red
+      Entities.target: [0, 255, 0],     # Green
+    }
+
+    # Update image with grid data and apply darker shades to visited trail
+    for i in range(self.size):
+      for j in range(self.size):
+        entity = self.grid[i, j]
+        if (i, j) in self.visited_trail:
+          # Darken the trail if it was visited
+          img[i, j] = np.array(ENTITY_COLORS[Entities.trail]) * 0.7
+        else:
+          img[i, j] = ENTITY_COLORS[entity]
+
+    return img
+
+  def render_as_large_image(self, cell_size=20):
+    """
+    Render the grid as a higher resolution image with borders between cells.
+    Each cell is enlarged by `cell_size` pixels, and cells will have black borders.
+    """
+    # Create an empty image with enough space to expand each cell by `cell_size` pixels
+    img = np.zeros((self.size * cell_size, self.size * cell_size, 3), dtype=np.uint8)
+
+    ENTITY_COLORS = {
+        Entities.empty: [255, 255, 255],  # White
+        Entities.wall: [128, 128, 128],   # Gray
+        Entities.trail: [0, 0, 255],      # Blue
+        Entities.agent: [255, 255, 0],    # Yellow
+        Entities.lava: [255, 0, 0],       # Red
+        Entities.target: [0, 255, 0],     # Green
+    }
+
+    # Loop over the grid and draw each cell at a larger scale
+    for i in range(self.size):
+      for j in range(self.size):
+        entity = self.grid[i, j]
+        # Determine the color for the entity
+        color = ENTITY_COLORS[entity]
+
+        # If the cell is part of the visited trail, darken the color
+        if (i, j) in self.visited_trail:
+          color = np.array(color) * 0.7  # Darken the trail color
+
+        # Scale the position of each cell
+        start_x = j * cell_size
+        start_y = i * cell_size
+        end_x = start_x + cell_size
+        end_y = start_y + cell_size
+
+        # Fill the corresponding cell area with the correct color
+        img[start_y:end_y, start_x:end_x] = color
+
+        # Draw black outline for each cell (optional, but enhances grid clarity)
+        # Only draw borders on the right and bottom to avoid duplicate borders at edges
+        if j < self.size - 1:  # right border
+          img[start_y:end_y, end_x] = [0, 0, 0]
+        if i < self.size - 1:  # bottom border
+          img[end_y, start_x:end_x] = [0, 0, 0]
+
+    return img
+
   
   @property
   def ascii(self):
