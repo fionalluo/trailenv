@@ -110,8 +110,8 @@ class LavaTrailEnv(gym.Env):
     lava_region[:] = Entities.lava
 
     # Set target position (center top, above lava)
-    self.grid[self.margin - 1, size // 2] = Entities.target
-    self.target_pos = np.array([self.margin - 1, size // 2])
+    self.grid[self.margin - 1, size // 2 - 1] = Entities.target
+    self.target_pos = np.array([self.margin - 1, size // 2 - 1])
 
     self.robot_pos = np.array([size - self.margin, size // 2])
 
@@ -131,8 +131,8 @@ class LavaTrailEnv(gym.Env):
       random.seed(self.trail_seed)
 
     # Start and end positions
-    start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + self.size // 8
-    end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - self.size // 8
+    start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + 1
+    end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - 1
     current_row, current_col = start_row, start_col
 
     # Define basic movement directions: up, left, right
