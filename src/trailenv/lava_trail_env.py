@@ -77,9 +77,10 @@ def colorize(
 
 
 class LavaTrailEnv(gym.Env):
-  def __init__(self, size, trail_seed=None):
+  def __init__(self, size, trail_seed=None, off_center=False):
     self.size = size
     self.trail_seed = trail_seed
+    self.off_center = off_center
     self.margin = 3 # margin of empty squares around the lava
 
     # Initialize empty grid
@@ -110,8 +111,9 @@ class LavaTrailEnv(gym.Env):
     lava_region[:] = Entities.lava
 
     # Set target position (center top, above lava)
-    self.grid[self.margin - 1, size // 2 - 1] = Entities.target
-    self.target_pos = np.array([self.margin - 1, size // 2 - 1])
+    shift = -1 if self.off_center else 0
+    self.grid[self.margin - 1, size // 2 + shift] = Entities.target
+    self.target_pos = np.array([self.margin - 1, size // 2 + shift])
 
     self.robot_pos = np.array([size - self.margin, size // 2])
 
@@ -131,8 +133,9 @@ class LavaTrailEnv(gym.Env):
       random.seed(self.trail_seed)
 
     # Start and end positions
-    start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + 1
-    end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - 1
+    shift = 1 if self.off_center else 0
+    start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + shift
+    end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - shift
     current_row, current_col = start_row, start_col
 
     # Define basic movement directions: up, left, right
@@ -236,7 +239,7 @@ class LavaTrailEnv(gym.Env):
   def _get_neighbors(self):
     # Get the neighbors of the agent.
     neighbors = []
-    for dr, dc in (-1, 0), (1, 0), (0, -1), (0, 1): # up down left right
+    for dr, dc in (-1, 0), (1, 0), (0, -1), (0, 1): # up down left right center
       r, c = self.robot_pos[0] + dr, self.robot_pos[1] + dc
       if 0 <= r < self.size and 0 <= c < self.size:
         neighbors.append(self.grid[r, c])
@@ -251,12 +254,12 @@ class LavaTrailEnv(gym.Env):
 
     # Get neighbors and one-hot encode them
     neighbors_raw = self._get_neighbors()
-    neighbors = np.zeros((4 * len(Entities),), dtype=np.int32)
+    neighbors = np.zeros((5 * len(Entities),), dtype=np.int32)
     for i, entity in enumerate(neighbors_raw):
         neighbors[len(Entities) * i + entity] = 1  # One-hot encode the neighbor type
     
     # Get neighbors where lava and trail are the same (both marked)
-    neighbors_unprivileged = np.zeros((4 * len(Entities),), dtype=np.int32)
+    neighbors_unprivileged = np.zeros((5 * len(Entities),), dtype=np.int32)
     for i, entity in enumerate(neighbors_raw):
       if entity == Entities.lava or entity == Entities.trail:
         neighbors_unprivileged[len(Entities) * i + Entities.lava] = 1
