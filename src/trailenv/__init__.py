@@ -73,8 +73,9 @@ for curriculum in [2, 3, 4, 5, 10, 15, 50]:
                 max_episode_steps=100,
                 kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold, centered=True)
             )
+
 # Register Lava Trail Envs
-for size in [16, 32, 64, 128]:
+for size in [16, 20, 32, 64, 128]:
     for seed in range(10):
         register2(
             id=f"LavaTrail{size}x{size}Seed{seed}-v0",
@@ -82,6 +83,12 @@ for size in [16, 32, 64, 128]:
             max_episode_steps=100,
             kwargs=dict(size=size, trail_seed=seed)
         )
+    register2(
+        id=f"LavaTrail{size}x{size}-v0",
+        entry_point="trailenv.lava_trail_env:LavaTrailEnv",
+        max_episode_steps=100,
+        kwargs=dict(size=size)
+    )
 
 # register2(
 #     id="ObsDictTrailEnv-v0",

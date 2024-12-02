@@ -77,7 +77,7 @@ def colorize(
 
 
 class LavaTrailEnv(gym.Env):
-  def __init__(self, size, trail_seed=0, priv=True):
+  def __init__(self, size, trail_seed=None):
     self.size = size
     self.trail_seed = trail_seed
     self.margin = 3 # margin of empty squares around the lava
@@ -127,11 +127,12 @@ class LavaTrailEnv(gym.Env):
   
   def _set_trail(self):
     # Set trail seed
-    random.seed(self.trail_seed)
+    if self.trail_seed is not None:
+      random.seed(self.trail_seed)
 
     # Start and end positions
-    start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1]
-    end_row, end_col = self.target_pos[0] + 1, self.target_pos[1]
+    start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + self.size // 8
+    end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - self.size // 8
     current_row, current_col = start_row, start_col
 
     # Define basic movement directions: up, left, right
@@ -216,7 +217,7 @@ class LavaTrailEnv(gym.Env):
       reward = 10.0
       terminated = True
     elif curr_cell == Entities.lava:
-      reward = -0.5
+      reward = -0.1
 
     self.visited_trail.add(tuple(new_pos))
     truncated = False
@@ -416,8 +417,8 @@ class LavaTrailEnv(gym.Env):
     return grid_str
 
 if __name__ == "__main__":
-  size = height = 32
-  env = LavaTrailEnv(size, trail_seed=0)
+  size = height = 16
+  env = LavaTrailEnv(size, trail_seed=7)
   # env.reset()
   # print(env.ascii)
   # exit()
@@ -428,6 +429,9 @@ if __name__ == "__main__":
   done = False
   while not done:
     key = input("type in wasd")
+    # env.reset()
+    # print(env.ascii)
+    # continue
     if key in KEY_ACTION_MAP:
       obs, rew, terminated, truncated, info = env.step(KEY_ACTION_MAP[key])
       print("rew", rew)
