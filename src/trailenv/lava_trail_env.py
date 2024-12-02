@@ -216,7 +216,7 @@ class LavaTrailEnv(gym.Env):
       reward = 10.0
       terminated = True
     elif curr_cell == Entities.lava:
-      reward = -0.1
+      reward = -0.5
 
     self.visited_trail.add(tuple(new_pos))
     truncated = False
@@ -326,7 +326,7 @@ class LavaTrailEnv(gym.Env):
     img = np.zeros((self.size * cell_size, self.size * cell_size, 3), dtype=np.uint8)
 
     ENTITY_COLORS = {
-        Entities.empty: [255, 255, 255],  # White
+        Entities.empty: [230, 230, 230],  # White
         Entities.wall: [128, 128, 128],   # Gray
         Entities.trail: [0, 0, 255],      # Blue
         Entities.agent: [255, 255, 0],    # Yellow
