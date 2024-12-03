@@ -77,7 +77,7 @@ def colorize(
 
 
 class LavaTrailEnv(gym.Env):
-  def __init__(self, size, trail_seed=None, off_center=False):
+  def __init__(self, size, trail_seed=None, off_center=True):
     self.size = size
     self.trail_seed = trail_seed
     self.off_center = off_center
@@ -111,7 +111,7 @@ class LavaTrailEnv(gym.Env):
     lava_region[:] = Entities.lava
 
     # Set target position (center top, above lava)
-    shift = -1 if self.off_center else 0
+    shift = random.choice([-1, 0]) if self.off_center else 0
     self.grid[self.margin - 1, size // 2 + shift] = Entities.target
     self.target_pos = np.array([self.margin - 1, size // 2 + shift])
 
@@ -133,7 +133,7 @@ class LavaTrailEnv(gym.Env):
       random.seed(self.trail_seed)
 
     # Start and end positions
-    shift = 1 if self.off_center else 0
+    shift = random.choice([1, 0]) if self.off_center else 0
     start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + shift
     end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - shift
     current_row, current_col = start_row, start_col
@@ -149,25 +149,26 @@ class LavaTrailEnv(gym.Env):
         # Attempt to move forward or turn left/right
         moved = False
         for dr, dc in random.sample(directions, len(directions)):
-            next_row, next_col = current_row + dr, current_col + dc
-            
-            # Ensure movement stays within the lava region and avoids overlapping
-            if (
-                self.margin + 1 <= next_row < self.size - self.margin - 1
-                and self.margin + 1 < next_col < self.size - self.margin - 1
-                and self.grid[next_row, next_col] != Entities.# The `trail` in the `LavaTrailEnv`
-                # environment is a path that is
-                # generated for the agent to follow from
-                # its starting position to the target
-                # position. Here is an overview of what
-                # the `trail` does in the environment:
-                trail
-            ):
-                current_row, current_col = next_row, next_col
-                self.grid[current_row, current_col] = Entities.trail
-                moved = True
-                break
-        
+            for _ in range(2):  # by doing 2 steps, we ensure paths will wind with margin of at least 1
+              next_row, next_col = current_row + dr, current_col + dc
+              
+              # Ensure movement stays within the lava region and avoids overlapping
+              if (
+                  self.margin + 1 <= next_row < self.size - self.margin - 1
+                  and self.margin + 1 < next_col < self.size - self.margin - 1
+                  and self.grid[next_row, next_col] != Entities.# The `trail` in the `LavaTrailEnv`
+                  # environment is a path that is
+                  # generated for the agent to follow from
+                  # its starting position to the target
+                  # position. Here is an overview of what
+                  # the `trail` does in the environment:
+                  trail
+              ):
+                  current_row, current_col = next_row, next_col
+                  self.grid[current_row, current_col] = Entities.trail
+                  moved = True
+                  # break
+          
         # If no valid move is possible, break out (unlikely but safe)
         if not moved:
             break
@@ -239,7 +240,7 @@ class LavaTrailEnv(gym.Env):
   def _get_neighbors(self):
     # Get the neighbors of the agent.
     neighbors = []
-    for dr, dc in (-1, 0), (1, 0), (0, -1), (0, 1): # up down left right center
+    for dr, dc in (-1, 0), (1, 0), (0, -1), (0, 1): # up down left right
       r, c = self.robot_pos[0] + dr, self.robot_pos[1] + dc
       if 0 <= r < self.size and 0 <= c < self.size:
         neighbors.append(self.grid[r, c])
@@ -254,12 +255,12 @@ class LavaTrailEnv(gym.Env):
 
     # Get neighbors and one-hot encode them
     neighbors_raw = self._get_neighbors()
-    neighbors = np.zeros((5 * len(Entities),), dtype=np.int32)
+    neighbors = np.zeros((4 * len(Entities),), dtype=np.int32)
     for i, entity in enumerate(neighbors_raw):
         neighbors[len(Entities) * i + entity] = 1  # One-hot encode the neighbor type
     
     # Get neighbors where lava and trail are the same (both marked)
-    neighbors_unprivileged = np.zeros((5 * len(Entities),), dtype=np.int32)
+    neighbors_unprivileged = np.zeros((4 * len(Entities),), dtype=np.int32)
     for i, entity in enumerate(neighbors_raw):
       if entity == Entities.lava or entity == Entities.trail:
         neighbors_unprivileged[len(Entities) * i + Entities.lava] = 1
@@ -421,7 +422,7 @@ class LavaTrailEnv(gym.Env):
 
 if __name__ == "__main__":
   size = height = 16
-  env = LavaTrailEnv(size, trail_seed=7)
+  env = LavaTrailEnv(size, trail_seed=None)
   # env.reset()
   # print(env.ascii)
   # exit()
@@ -432,11 +433,15 @@ if __name__ == "__main__":
   done = False
   while not done:
     key = input("type in wasd")
-    # env.reset()
-    # print(env.ascii)
-    # continue
+    env.reset()
+    print(env.ascii)
+    continue
     if key in KEY_ACTION_MAP:
       obs, rew, terminated, truncated, info = env.step(KEY_ACTION_MAP[key])
       print("rew", rew)
-      print("obs", obs)
+      # print("obs", obs)
+      dirs = ["up", "down", "left", "right"]
+      for i in range(4):
+        print(obs["neighbors"][i*len(Entities): (i+1)*len(Entities)], dirs[i])
+        print(obs["neighbors_unprivileged"][i*len(Entities): (i+1)*len(Entities)], dirs[i])
       print(env.ascii)
