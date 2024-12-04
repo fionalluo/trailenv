@@ -77,11 +77,12 @@ def colorize(
 
 
 class LavaTrailEnv(gym.Env):
-  def __init__(self, size, trail_seed=None, off_center=True):
+  def __init__(self, size, trail_seed=None, off_center=False):
     self.size = size
     self.trail_seed = trail_seed
     self.off_center = off_center
     self.margin = 3 # margin of empty squares around the lava
+    self.trail_forward = []
 
     # Initialize empty grid
     self._reset_grid()
@@ -111,7 +112,7 @@ class LavaTrailEnv(gym.Env):
     lava_region[:] = Entities.lava
 
     # Set target position (center top, above lava)
-    shift = random.choice([-1, 0]) if self.off_center else 0
+    shift = random.choice([-1, 1]) if self.off_center else 0
     self.grid[self.margin - 1, size // 2 + shift] = Entities.target
     self.target_pos = np.array([self.margin - 1, size // 2 + shift])
 
@@ -128,61 +129,75 @@ class LavaTrailEnv(gym.Env):
     self.grid[size - self.margin, size // 2] = Entities.agent
   
   def _set_trail(self):
-    # Set trail seed
-    if self.trail_seed is not None:
-      random.seed(self.trail_seed)
+    reward = 0
 
-    # Start and end positions
-    shift = random.choice([1, 0]) if self.off_center else 0
-    start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + shift
-    end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - shift
-    current_row, current_col = start_row, start_col
+    while reward >= 0:
 
-    # Define basic movement directions: up, left, right
-    directions = [(-1, 0), (0, -1), (0, 1)]
-    
-    # Mark the starting position
-    self.grid[current_row, current_col] = Entities.trail
+      # Set trail seed
+      if self.trail_seed is not None:
+        random.seed(self.trail_seed)
 
-    # Generate the trail
-    while (current_row, current_col) != (end_row, end_col):
-        # Attempt to move forward or turn left/right
-        moved = False
-        for dr, dc in random.sample(directions, len(directions)):
-            for _ in range(2):  # by doing 2 steps, we ensure paths will wind with margin of at least 1
-              next_row, next_col = current_row + dr, current_col + dc
-              
-              # Ensure movement stays within the lava region and avoids overlapping
-              if (
-                  self.margin + 1 <= next_row < self.size - self.margin - 1
-                  and self.margin + 1 < next_col < self.size - self.margin - 1
-                  and self.grid[next_row, next_col] != Entities.# The `trail` in the `LavaTrailEnv`
-                  # environment is a path that is
-                  # generated for the agent to follow from
-                  # its starting position to the target
-                  # position. Here is an overview of what
-                  # the `trail` does in the environment:
-                  trail
-              ):
-                  current_row, current_col = next_row, next_col
-                  self.grid[current_row, current_col] = Entities.trail
-                  moved = True
-                  # break
-          
-        # If no valid move is possible, break out (unlikely but safe)
-        if not moved:
+      # Start and end positions
+      shift = random.choice([1, 0]) if self.off_center else 0
+      start_row, start_col = self.robot_pos[0] - 1, self.robot_pos[1] + shift
+      end_row, end_col = self.target_pos[0] + 1, self.target_pos[1] - shift
+      current_row, current_col = start_row, start_col
+
+      # Define basic movement directions: up, left, right
+      directions = [(-1, 0), (0, -1), (0, 1)]
+      
+      # Mark the starting position
+      self.grid[current_row, current_col] = Entities.trail
+
+      # Generate the trail
+      while (current_row, current_col) != (end_row, end_col):
+          # Attempt to move forward or turn left/right
+          moved = False
+          for dr, dc in random.sample(directions, len(directions)):
+              for _ in range(2):  # by doing 2 steps, we ensure paths will wind with margin of at least 1
+                next_row, next_col = current_row + dr, current_col + dc
+                
+                # Ensure movement stays within the lava region and avoids overlapping
+                if (
+                    self.margin + 1 <= next_row < self.size - self.margin - 1
+                    and self.margin + 1 < next_col < self.size - self.margin - 1
+                    and self.grid[next_row, next_col] != Entities.trail
+                    and not (next_row == start_row - 2 and next_col == start_col)
+                ):
+                    current_row, current_col = next_row, next_col
+                    self.grid[current_row, current_col] = Entities.trail
+                    moved = True
+                    # break
+            
+          # If no valid move is possible, break out (unlikely but safe)
+          if not moved:
+              break
+          if current_row == end_row + 1:
             break
-        if current_row == end_row + 1:
-          break
-    
-    # Move from the last trail position to the target position
-    col_dir = 1 if current_col < end_col else -1
-    while current_col != end_col:
-        current_col += col_dir
-        self.grid[current_row, current_col] = Entities.trail
+      
+      # Move from the last trail position to the target position
+      col_dir = 1 if current_col < end_col else -1
+      while current_col != end_col:
+          current_col += col_dir
+          self.grid[current_row, current_col] = Entities.trail
 
-    # Mark the target position as part of the trail
-    self.grid[end_row, end_col] = Entities.trail
+      # Mark the target position as part of the trail
+      self.grid[end_row, end_col] = Entities.trail
+
+      # Get the reward from going up
+      # Make sure the reward from going in a straight line up to the target is NEGATIVE
+      reward = 0
+      for r in range(start_row - 1, end_row, -1):
+        if self.grid[r][start_col] == Entities.trail:
+          reward += 0.5
+        else:
+          reward -= 0.2
+      # print("Forward reward", reward)
+      if reward >= 0:
+        size = self.size
+        lava_region = self.grid[self.margin: size - self.margin, self.margin: size - self.margin]
+        lava_region[:] = Entities.lava
+      # print("Trail forward average", sum(self.trail_forward) / len(self.trail_forward))
   
   def reset(self, *, seed=None, options=None):
     self._reset_grid()
@@ -221,7 +236,7 @@ class LavaTrailEnv(gym.Env):
       reward = 10.0
       terminated = True
     elif curr_cell == Entities.lava:
-      reward = -0.1
+      reward = -0.2
 
     self.visited_trail.add(tuple(new_pos))
     truncated = False
