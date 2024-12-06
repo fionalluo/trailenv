@@ -75,7 +75,7 @@ for curriculum in [2, 3, 4, 5, 10, 15, 50]:
             )
 
 # Register Lava Trail Envs
-for size in [16, 20, 32, 64, 128]:
+for size in [7, 8, 12, 16, 20, 32, 64, 128]:
     for seed in range(10):
         register2(
             id=f"LavaTrail{size}x{size}Seed{seed}-v0",
