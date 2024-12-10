@@ -90,6 +90,14 @@ for size in [7, 8, 12, 16, 20, 32, 64, 128]:
         kwargs=dict(size=size)
     )
 
+# Registering Bandit Envs
+register2(
+    id="BanditEnv-v0",
+    entry_point="trailenv.bandit_env:BanditEnv",
+    max_episode_steps=1,
+    kwargs=dict()
+)
+
 # register2(
 #     id="ObsDictTrailEnv-v0",
 #     entry_point="trailenv.trail_env:ObsDictTrailEnv",

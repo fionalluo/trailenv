@@ -241,9 +241,11 @@ class LavaTrailEnv(gym.Env):
     elif curr_cell == Entities.lava:
       reward = -0.1
       terminated = True
-    elif curr_cell == Entities.empty:
+    elif curr_cell == Entities.empty and tuple(new_pos) not in self.visited_trail:
       # reward -= 0.01
-      reward = 0.0
+      reward += 0.0625
+    elif curr_cell == Entities.empty and tuple(new_pos) in self.visited_trail:
+      reward -= 0.0625
     
     # getting positive rewards decays over time
     reward = reward if reward < 0 else reward * (0.99 ** self.steps)
