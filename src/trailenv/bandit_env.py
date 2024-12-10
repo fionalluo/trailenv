@@ -156,7 +156,7 @@ class BanditEnv(gym.Env):
     elif curr_cell == Entities.empty:
       reward = 0
     elif curr_cell == Entities.small_target:
-      reward = 1.0
+      reward = 3.0
       terminated = True
 
     truncated = False
