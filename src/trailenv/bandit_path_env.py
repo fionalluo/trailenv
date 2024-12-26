@@ -12,16 +12,19 @@ class Actions(IntEnum):
   left = 0
   right = 1
   up = 2
+  down = 3
 
 ACTION_COORDS = {
   Actions.left: np.array([0,-1]),
   Actions.right: np.array([0,1]),
   Actions.up: np.array([-1,0]),
+  Actions.down: np.array([1,0]),
 }
 
 KEY_ACTION_MAP = {
   "w": Actions.up,
   "a": Actions.left,
+  "s": Actions.down,
   "d": Actions.right,
 }
 
@@ -73,50 +76,58 @@ def colorize(
     return f"\x1b[{attrs}m{string}\x1b[0m"
 
 
-class BanditEnv(gym.Env):
-  def __init__(self):
+class BanditPathEnv(gym.Env):
+  def __init__(self, path_length=5):
     self.steps = 0
-    self.rows = 2
-    self.cols = 3
+    self.rows = 2 + path_length
+    self.cols = 3 + 2 * path_length
+    self.path_length = path_length
 
     # Initialize empty grid
     self._reset_grid()
 
     # Define observation space
     self.observation_space = spaces.Dict({
+      "distance": spaces.Box(low=0, high=self.rows + self.cols, shape=(1,), dtype=np.int32),
       "neighbors": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded
       "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded. Lava and trail appear the same
       "target": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
       "target_unprivileged": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
-      "image": spaces.Box(low=0, high=255, shape=(2, 3, 3), dtype=np.uint8),  # RGB image of the grid
-      "large_image": spaces.Box(low=0, high=255, shape=(2 * 20, 3 * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
+      "image": spaces.Box(low=0, high=255, shape=(self.rows, self.cols, 3), dtype=np.uint8),  # RGB image of the grid
+      "large_image": spaces.Box(low=0, high=255, shape=(self.rows * 20, self.cols * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
     })
 
     self.action_space = spaces.Discrete(len(Actions))
   
   def _reset_grid(self):
-    self.grid = np.zeros((2, 3), dtype=int)
+    self.grid = np.zeros((self.rows, self.cols), dtype=int)
+    self.grid[:-1, :] = Entities.wall
+    self.grid[:, self.path_length + 1] = Entities.empty
     self.steps = 0
 
     self.grid[0, 0] = Entities.wall
     self.grid[0, 2] = Entities.wall
     if random.random() < 0.5:
       self.target_up = True
-      self.grid[0, 1] = Entities.target
-      self.grid[1, 2] = Entities.lava
+      self.grid[0, self.path_length + 1] = Entities.target
+      self.grid[-1, -1] = Entities.lava
+      self.target_pos = np.array([0, self.path_length + 1])
     else:
       self.target_up = False
-      self.grid[0, 1] = Entities.lava
-      self.grid[1, 2] = Entities.target
-    self.grid[1, 0] = Entities.small_target
+      self.grid[0, self.path_length + 1] = Entities.lava
+      self.grid[-1, -1] = Entities.target
+      self.target_pos = np.array([self.rows - 1, self.cols - 1])
+    self.grid[-1, 0] = Entities.small_target
 
-    self.robot_pos = np.array([1, 1])
+    self.robot_pos = np.array([self.rows - 1, self.path_length + 1])
 
     # Make a copy of the initial grid for resetting states when the agent moves
     self.initial_grid = deepcopy(self.grid)
 
     # Set robot position (center bottom, below lava)
-    self.grid[1, 1] = Entities.agent
+    self.grid[-1, self.path_length + 1] = Entities.agent
+
+    self.visited_trail = set()
   
   def reset(self, *, seed=None, options=None):
     self._reset_grid()
@@ -130,7 +141,7 @@ class BanditEnv(gym.Env):
     self.last_action = action
 
     # if agent is out of bounds or inside a wall, revert back.
-    within_bounds =  (0 <= new_pos[0] < 2) and (0 <= new_pos[1] < 3)
+    within_bounds =  (0 <= new_pos[0] < self.rows) and (0 <= new_pos[1] < self.cols)
     if not within_bounds or (self.grid[new_pos[0], new_pos[1]] == Entities.wall):
       new_pos = old_pos
 
@@ -153,8 +164,11 @@ class BanditEnv(gym.Env):
     elif curr_cell == Entities.lava:
       reward = -1.0
       terminated = True
-    elif curr_cell == Entities.empty:
-      reward = 0
+    elif curr_cell == Entities.empty and tuple(new_pos) not in self.visited_trail:
+      reward = 0.01
+      self.visited_trail.add(tuple(new_pos))
+    elif curr_cell == Entities.empty and tuple(new_pos) in self.visited_trail:
+      reward = -0.02
     elif curr_cell == Entities.small_target:
       reward = 0.3
       terminated = True
@@ -181,6 +195,9 @@ class BanditEnv(gym.Env):
     return neighbors
 
   def gen_obs(self):
+    # Get manhattan distance to target
+    distance = np.abs(self.robot_pos[0] - self.target_pos[0]) + np.abs(self.robot_pos[1] - self.target_pos[1])
+
     # Get neighbors and one-hot encode them
     neighbors_raw = self._get_neighbors()
     neighbors = np.zeros((4 * len(Entities),), dtype=np.int32)
@@ -209,6 +226,7 @@ class BanditEnv(gym.Env):
 
     # Combine into the observation dictionary
     obs = {
+        "distance": np.array([distance]),
         "neighbors": neighbors,
         "neighbors_unprivileged": neighbors_unprivileged,
         "target": target,
@@ -218,18 +236,19 @@ class BanditEnv(gym.Env):
     }
 
     # Assert the correct shapes
+    assert obs["distance"].shape == (1,)
     assert obs["neighbors"].shape == (4 * len(Entities),)
     assert obs["neighbors_unprivileged"].shape == (4 * len(Entities),)
     assert obs["target"].shape == (1,)
     assert obs["target_unprivileged"].shape == (1,)
-    assert obs["image"].shape == (2, 3, 3)
-    assert obs["large_image"].shape == (2 * 20, 3 * 20, 3)
+    assert obs["image"].shape == (self.rows, self.cols, 3)
+    assert obs["large_image"].shape == (self.rows * 20, self.cols * 20, 3)
 
     return obs
 
   def render_as_image(self):
     # Generate an image of the grid with visited trail as darker
-    img = np.zeros((2, 3, 3), dtype=np.uint8)
+    img = np.zeros((self.rows, self.cols, 3), dtype=np.uint8)
     
     ENTITY_COLORS = {
       Entities.empty: [255, 255, 255],  # White
@@ -338,7 +357,7 @@ class BanditEnv(gym.Env):
     return grid_str
 
 if __name__ == "__main__":
-  env = BanditEnv()
+  env = BanditPathEnv()
   # env.reset()
   # print(env.ascii)
   # exit()
@@ -348,13 +367,18 @@ if __name__ == "__main__":
   print(env.ascii)
   
   done = False
+  total = 0
+  up = 0
   while not done:
     key = input("type in wasd")
-    env.reset()
-    print(env.ascii)
-    print("target", env.gen_obs()["target"])
-    print("target_unprivileged", env.gen_obs()["target_unprivileged"])
-    continue
+    # env.reset()
+    # print(env.ascii)
+    # print("target", env.gen_obs()["target"])
+    # total += 1
+    # if env.gen_obs()["target"][0] == 1:
+    #   up += 1
+    # print("target_unprivileged", env.gen_obs()["target_unprivileged"])
+    # print(up / total)
     # continue
     if key in KEY_ACTION_MAP:
       obs, rew, terminated, truncated, info = env.step(KEY_ACTION_MAP[key])
