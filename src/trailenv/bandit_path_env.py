@@ -6,6 +6,8 @@ import numpy as np
 from gymnasium import spaces
 import gymnasium as gym
 import cv2
+import jax.numpy as jnp
+import jax
 
 
 class Actions(IntEnum):
@@ -246,6 +248,87 @@ class BanditPathEnv(gym.Env):
 
     return obs
 
+  def get_fixed_trail(self, action: int):
+    """
+    Perform the specified action until the environment is finished.
+    Returns the trajectory of all actions and observations.
+    
+    Parameters:
+      action (int): The fixed action to perform at each step.
+
+    Returns:
+      dict: A dictionary containing:
+        - 'actions': A list of actions taken (including an initial all-zero action).
+        - 'observations': A list of observations collected.
+    """
+    # Reset the environment and initialize trajectory
+    observation = self.reset()  # Reset the environment
+    observations = [observation]  # Store the first observation
+    actions = [np.zeros_like(action)]  # First "action" is an all-zero placeholder
+    
+    done = False
+    while not done:
+      observation, reward, done, truncated, info = self.step(action)  # Perform the fixed action
+      observations.append(observation)  # Append the observation
+      actions.append(action)  # Append the fixed action
+
+    # Return the trajectory as a dictionary
+    return {
+      "actions": actions,
+      "observations": observations,
+    }
+  
+  @staticmethod
+  def render_reward_penalty(kl_div_left, kl_div_right, kl_div_up, path_length=5, cell_size=20):
+    """
+    Render the reward penalty for the current state.
+    """
+    rows = 2 + path_length
+    cols = 3 + 2 * path_length
+    grid = np.zeros((rows, cols, 3), dtype=np.uint8)
+    # Use jax.numpy for the max operation instead of numpy
+    jnp_max = jnp.max(jnp.array([jnp.max(kl_div_left), jnp.max(kl_div_right), jnp.max(kl_div_up)]))
+
+    @jax.jit
+    def get_concrete_value(traced_value):
+      # We use `jax.pure_callback` to invoke the host-side conversion of the JAX tracer
+      # The result shape and dtype must be known in advance, and are inferred from the input `traced_value`.
+      result_shape = jax.core.ShapedArray(traced_value.shape, traced_value.dtype)
+      # jax.pure_callback is used to get the concrete value via numpy's device_get mechanism
+      return jax.pure_callback(jax.device_get, result_shape, traced_value)
+
+    max_kl_div = get_concrete_value(jnp_max) # jax._src.interpreters.partial_eval.DynamicJaxprTracer
+
+    # print("JNP_MAX TYPE", type(jnp_max))  # <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>
+    # print("JNP_MAX", jnp_max)  # Traced<ShapedArray(float32[])>with<DynamicJaxprTrace(level=1/0)>
+    print("MAX_KL_DIV TYPE", type(max_kl_div))  # <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>
+    print("MAX_KL_DIV", max_kl_div)  # Traced<ShapedArray(float32[])>with<DynamicJaxprTrace(level=1/0)>
+    jax.debug.print("Max kl div value: {}", max_kl_div)
+    purple = [255, 0, 255]  # Purple for the trail
+    # Color left
+    for c, i in zip(range(path_length + 1, -1, -1), range(path_length + 1)):
+      grid[rows - 1, c] = purple * kl_div_left[i] / max_kl_div
+    # Color right
+    for c, i in zip(range(path_length + 1, cols), range(path_length + 1)):
+      grid[rows - 1, c] = purple * kl_div_right[i - path_length - 1] / max_kl_div
+    # Color up
+    for r, i in zip(range(rows - 1, -1, -1), range(path_length + 1)):
+      grid[r, path_length + 1] = purple * kl_div_up[i] / max_kl_div
+    
+    grid[rows - 1, 0] = [255, 255, 0]  # Yellow for small target
+    
+    # Scale up the image by 20 times
+    large_grid = np.zeros((rows * cell_size, cols * cell_size, 3), dtype=np.uint8)
+    for i in range(rows):
+      for j in range(cols):
+        start_x = j * cell_size
+        start_y = i * cell_size
+        end_x = start_x + cell_size
+        end_y = start_y + cell_size
+        large_grid[start_y:end_y, start_x:end_x] = grid[i, j]
+
+    return large_grid
+
   def render_as_image(self):
     # Generate an image of the grid with visited trail as darker
     img = np.zeros((self.rows, self.cols, 3), dtype=np.uint8)
@@ -299,13 +382,6 @@ class BanditPathEnv(gym.Env):
 
         # Fill the corresponding cell area with the correct color
         img[start_y:end_y, start_x:end_x] = color
-
-        # # Draw black outline for each cell (optional, but enhances grid clarity)
-        # # Only draw borders on the right and bottom to avoid duplicate borders at edges
-        # if j < self.cols - 1:  # right border
-        #   img[start_y:end_y, end_x] = [0, 0, 0]
-        # if i < self.rows - 1:  # bottom border
-        #   img[end_y, start_x:end_x] = [0, 0, 0]
 
     return img
 
