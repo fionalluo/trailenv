@@ -97,11 +97,12 @@ class BanditPathEnv(gym.Env):
       "target_unprivileged": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
       "image": spaces.Box(low=0, high=255, shape=(self.rows, self.cols, 3), dtype=np.uint8),  # RGB image of the grid
       "large_image": spaces.Box(low=0, high=255, shape=(self.rows * 20, self.cols * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
+      "is_terminal": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),  # 1 if is terminal
     })
 
     self.action_space = spaces.Discrete(len(Actions))
   
-  def _reset_grid(self):
+  def _reset_grid(self, target_up=None):
     self.grid = np.zeros((self.rows, self.cols), dtype=int)
     self.grid[:-1, :] = Entities.wall
     self.grid[:, self.path_length + 1] = Entities.empty
@@ -109,7 +110,7 @@ class BanditPathEnv(gym.Env):
 
     self.grid[0, 0] = Entities.wall
     self.grid[0, 2] = Entities.wall
-    if random.random() < 0.5:
+    if random.random() < 0.5 and not target_up or target_up is True:
       self.target_up = True
       self.grid[0, self.path_length + 1] = Entities.target
       self.grid[-1, -1] = Entities.lava
@@ -131,8 +132,8 @@ class BanditPathEnv(gym.Env):
 
     self.visited_trail = set()
   
-  def reset(self, *, seed=None, options=None):
-    self._reset_grid()
+  def reset(self, *, seed=None, options=None, target_up=None):
+    self._reset_grid(target_up=target_up)
     init_obs = self.gen_obs()
     return init_obs, {}
 
@@ -225,6 +226,10 @@ class BanditPathEnv(gym.Env):
     else:
       target = np.array([0])
       target_unprivileged = np.array([0])
+    
+    terminal = 0
+    if self.grid[self.robot_pos[0], self.robot_pos[1]] in [Entities.small_target, Entities.target, Entities.lava]:
+      terminal = 1
 
     # Combine into the observation dictionary
     obs = {
@@ -235,6 +240,7 @@ class BanditPathEnv(gym.Env):
         "target_unprivileged": target_unprivileged,
         "image": image,
         "large_image": large_image,
+        "is_terminal": terminal,
     }
 
     # Assert the correct shapes
@@ -252,6 +258,7 @@ class BanditPathEnv(gym.Env):
     """
     Perform the specified action until the environment is finished.
     Returns the trajectory of all actions and observations.
+    Always have the target spawn up.
     
     Parameters:
       action (int): The fixed action to perform at each step.
@@ -262,7 +269,7 @@ class BanditPathEnv(gym.Env):
         - 'observations': A list of observations collected.
     """
     # Reset the environment and initialize trajectory
-    observation = self.reset()  # Reset the environment
+    observation, _ = self.reset(target_up=True)  # Reset the environment
     observations = [observation]  # Store the first observation
     actions = [np.zeros_like(action)]  # First "action" is an all-zero placeholder
     
@@ -277,47 +284,44 @@ class BanditPathEnv(gym.Env):
       "actions": actions,
       "observations": observations,
     }
-  
-  @staticmethod
-  def render_reward_penalty(kl_div_left, kl_div_right, kl_div_up, path_length=5, cell_size=20):
-    """
-    Render the reward penalty for the current state.
-    """
-    rows = 2 + path_length
-    cols = 3 + 2 * path_length
+
+  def render_reward_penalty(self, kl_div_lru: list[list[float]], cell_size=50):
+    """Render the reward penalty for the current state."""
+    rows = 2 + self.path_length
+    cols = 3 + 2 * self.path_length
     grid = np.zeros((rows, cols, 3), dtype=np.uint8)
-    # Use jax.numpy for the max operation instead of numpy
-    jnp_max = jnp.max(jnp.array([jnp.max(kl_div_left), jnp.max(kl_div_right), jnp.max(kl_div_up)]))
 
-    @jax.jit
-    def get_concrete_value(traced_value):
-      # We use `jax.pure_callback` to invoke the host-side conversion of the JAX tracer
-      # The result shape and dtype must be known in advance, and are inferred from the input `traced_value`.
-      result_shape = jax.core.ShapedArray(traced_value.shape, traced_value.dtype)
-      # jax.pure_callback is used to get the concrete value via numpy's device_get mechanism
-      return jax.pure_callback(jax.device_get, result_shape, traced_value)
+    # Calculate the max KL divergence for normalization
+    max_kl_div = max([max(kl_div) for kl_div in kl_div_lru])
+    kl_div_left, kl_div_right, kl_div_up = kl_div_lru
 
-    max_kl_div = get_concrete_value(jnp_max) # jax._src.interpreters.partial_eval.DynamicJaxprTracer
+    # Fill the grid with walls (gray)
+    grid[:, :] = [128, 128, 128]  # Gray for walls
 
-    # print("JNP_MAX TYPE", type(jnp_max))  # <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>
-    # print("JNP_MAX", jnp_max)  # Traced<ShapedArray(float32[])>with<DynamicJaxprTrace(level=1/0)>
-    print("MAX_KL_DIV TYPE", type(max_kl_div))  # <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>
-    print("MAX_KL_DIV", max_kl_div)  # Traced<ShapedArray(float32[])>with<DynamicJaxprTrace(level=1/0)>
-    jax.debug.print("Max kl div value: {}", max_kl_div)
-    purple = [255, 0, 255]  # Purple for the trail
+    # Define colors
+    base_purple = np.array([200, 0, 200])  # Vivid purple
+    def get_color(value):
+      intensity = value / max_kl_div
+      return ((1 - intensity) * 255 + intensity * base_purple).astype(np.uint8)
+
     # Color left
-    for c, i in zip(range(path_length + 1, -1, -1), range(path_length + 1)):
-      grid[rows - 1, c] = purple * kl_div_left[i] / max_kl_div
+    for c, i in zip(range(self.path_length + 1, -1, -1), range(self.path_length + 2)):
+      grid[rows - 1, c] = get_color(kl_div_left[i])
+
     # Color right
-    for c, i in zip(range(path_length + 1, cols), range(path_length + 1)):
-      grid[rows - 1, c] = purple * kl_div_right[i - path_length - 1] / max_kl_div
+    for c, i in zip(range(self.path_length + 1, cols), range(self.path_length + 2)):
+      grid[rows - 1, c] = get_color(kl_div_right[i])
+
     # Color up
-    for r, i in zip(range(rows - 1, -1, -1), range(path_length + 1)):
-      grid[r, path_length + 1] = purple * kl_div_up[i] / max_kl_div
-    
-    grid[rows - 1, 0] = [255, 255, 0]  # Yellow for small target
-    
-    # Scale up the image by 20 times
+    for r, i in zip(range(rows - 1, -1, -1), range(self.path_length + 2)):
+      grid[r, self.path_length + 1] = get_color(kl_div_up[i])
+
+    # Define special grid positions
+    grid[0, self.path_length + 1] = [0, 255, 0]  # Green for target up
+    grid[rows - 1, 0] = [255, 255, 0]  # Yellow for target small
+    grid[rows - 1, cols - 1] = [255, 0, 0]  # Red for lava
+
+    # Scale up the grid for visualization
     large_grid = np.zeros((rows * cell_size, cols * cell_size, 3), dtype=np.uint8)
     for i in range(rows):
       for j in range(cols):
@@ -326,6 +330,27 @@ class BanditPathEnv(gym.Env):
         end_x = start_x + cell_size
         end_y = start_y + cell_size
         large_grid[start_y:end_y, start_x:end_x] = grid[i, j]
+
+    # Add KL divergence text to the scaled grid
+    font = cv2.FONT_HERSHEY_DUPLEX
+    font_scale = 0.55  # Larger font scale for clarity
+    thickness = 1  # Thickness for better visibility
+
+    # Add KL divergences (left, right, up)
+    for c, i in zip(range(self.path_length, -1, -1), range(1, self.path_length + 1)):  # Left
+      text = f"{kl_div_left[i]:.2f}"
+      pos = (c * cell_size + cell_size // 10, (rows - 1) * cell_size + cell_size // 2 + 5)  # Slightly shifted
+      cv2.putText(large_grid, text, pos, font, font_scale, (0, 0, 0), thickness)
+
+    for c, i in zip(range(self.path_length + 2, cols), range(1, self.path_length + 1)):  # Right
+      text = f"{kl_div_right[i]:.2f}"
+      pos = (c * cell_size + cell_size // 10, (rows - 1) * cell_size + cell_size // 2 + 5)  # Slightly shifted
+      cv2.putText(large_grid, text, pos, font, font_scale, (0, 0, 0), thickness)
+
+    for r, i in zip(range(rows - 1, -1, -1), range(self.path_length + 1)):  # Up
+      text = f"{kl_div_up[i]:.2f}"
+      pos = ((self.path_length + 1) * cell_size + cell_size // 10, r * cell_size + cell_size // 2 + 5)  # Slightly shifted
+      cv2.putText(large_grid, text, pos, font, font_scale, (0, 0, 0), thickness)
 
     return large_grid
 
