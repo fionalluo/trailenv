@@ -96,6 +96,10 @@ class LavaTrailEnv(gym.Env):
       "last_action": spaces.Box(low=0, high=1, shape=(len(Actions),), dtype=np.int32),  # One-hot encoded last action
       "image": spaces.Box(low=0, high=255, shape=(self.size, self.size, 3), dtype=np.uint8),  # RGB image of the grid
       "large_image": spaces.Box(low=0, high=255, shape=(self.size * 20, self.size * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
+      
+      "grid": spaces.Box(low=0, high=len(Entities), shape=(self.size, self.size), dtype=np.int32),  # Grid with entity values
+      "grid_unprivileged": spaces.Box(low=0, high=len(Entities), shape=(self.size, self.size), dtype=np.int32),  # Grid with lava and trail appearing the same
+      "position": spaces.Box(low=0, high=size, shape=(2,), dtype=np.int32),  # Agent position
       # Multibinary is not compatible with dreamer...?
       # "neighbors": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded neighbors
       # "neighbors_unprivileged": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded. Lava and trail appear the same
@@ -304,6 +308,11 @@ class LavaTrailEnv(gym.Env):
     image = self.render_as_image()
     large_image = self.render_as_large_image()
 
+    grid = np.array(self.grid)
+    grid_unprivileged = np.array(self.grid)
+    grid_unprivileged[grid_unprivileged == Entities.trail] = Entities.lava
+    position = np.array(self.robot_pos)
+
     # Combine into the observation dictionary
     obs = {
         "distance": distance,
@@ -312,6 +321,9 @@ class LavaTrailEnv(gym.Env):
         "last_action": last_action,
         "image": image,
         "large_image": large_image,
+        "grid": grid,
+        "grid_unprivileged": grid_unprivileged,
+        "position": position,
     }
 
     # Assert the correct shapes
@@ -466,7 +478,7 @@ if __name__ == "__main__":
     if key in KEY_ACTION_MAP:
       obs, rew, terminated, truncated, info = env.step(KEY_ACTION_MAP[key])
       print("rew", rew)
-      # print("obs", obs)
+      print("obs", obs)
       # dirs = ["up", "down", "left", "right"]
       # for i in range(4):
       #   print(obs["neighbors"][i*len(Entities): (i+1)*len(Entities)], dirs[i])
