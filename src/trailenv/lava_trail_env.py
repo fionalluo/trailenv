@@ -97,8 +97,8 @@ class LavaTrailEnv(gym.Env):
       "image": spaces.Box(low=0, high=255, shape=(self.size, self.size, 3), dtype=np.uint8),  # RGB image of the grid
       "large_image": spaces.Box(low=0, high=255, shape=(self.size * 20, self.size * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
       
-      "grid": spaces.Box(low=0, high=len(Entities), shape=(self.size, self.size), dtype=np.int32),  # Grid with entity values
-      "grid_unprivileged": spaces.Box(low=0, high=len(Entities), shape=(self.size, self.size), dtype=np.int32),  # Grid with lava and trail appearing the same
+      "grid": spaces.Box(low=0, high=len(Entities), shape=(self.size * self.size,), dtype=np.int32),  # Grid with entity values
+      "grid_unprivileged": spaces.Box(low=0, high=len(Entities), shape=(self.size * self.size,), dtype=np.int32),  # Grid with lava and trail appearing the same
       "position": spaces.Box(low=0, high=size, shape=(2,), dtype=np.int32),  # Agent position
       # Multibinary is not compatible with dreamer...?
       # "neighbors": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded neighbors
@@ -309,8 +309,12 @@ class LavaTrailEnv(gym.Env):
     large_image = self.render_as_large_image()
 
     grid = np.array(self.grid)
+    grid = grid.flatten()
+
     grid_unprivileged = np.array(self.grid)
     grid_unprivileged[grid_unprivileged == Entities.trail] = Entities.lava
+    grid_unprivileged = grid_unprivileged.flatten()
+    
     position = np.array(self.robot_pos)
 
     # Combine into the observation dictionary
