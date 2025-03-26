@@ -84,6 +84,10 @@ class LavaTrailEnv(gym.Env):
     self.margin = 1 # margin of empty squares around the lava
     self.trail_forward = []
     self.steps = 0
+    self.heatmap_counts = np.zeros((size, size), dtype=int)  # Count of visits to each cell (in the last _ runs)
+    self.heatmap = np.zeros((size * 20, size * 20, 3), dtype=int)
+    self.heatmap_runs_max = 5000
+    self.runs = 0
 
     # Initialize empty grid
     self._reset_grid()
@@ -95,11 +99,12 @@ class LavaTrailEnv(gym.Env):
       "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),  # One-hot encoded. Lava and trail appear the same
       "last_action": spaces.Box(low=0, high=1, shape=(len(Actions),), dtype=np.int32),  # One-hot encoded last action
       "image": spaces.Box(low=0, high=255, shape=(self.size, self.size, 3), dtype=np.uint8),  # RGB image of the grid
-      "large_image": spaces.Box(low=0, high=255, shape=(self.size * 20, self.size * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
+      # "large_image": spaces.Box(low=0, high=255, shape=(self.size * 20, self.size * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
       
       "grid": spaces.Box(low=0, high=len(Entities), shape=(self.size * self.size,), dtype=np.int32),  # Grid with entity values
       "grid_unprivileged": spaces.Box(low=0, high=len(Entities), shape=(self.size * self.size,), dtype=np.int32),  # Grid with lava and trail appearing the same
       "position": spaces.Box(low=0, high=size, shape=(2,), dtype=np.int32),  # Agent position
+      "heatmap": spaces.Box(low=0, high=255, shape=(self.size * 20, self.size * 20, 3), dtype=np.uint8),  # Heatmap of agent visits
       # Multibinary is not compatible with dreamer...?
       # "neighbors": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded neighbors
       # "neighbors_unprivileged": spaces.MultiBinary(4 * len(Entities)),  # One-hot encoded. Lava and trail appear the same
@@ -208,6 +213,13 @@ class LavaTrailEnv(gym.Env):
   def reset(self, *, seed=None, options=None):
     self._reset_grid()
     init_obs = self.gen_obs()
+    self.runs += 1
+
+    if self.runs >= self.heatmap_runs_max:
+      # reset the heatmap every thousands of runs
+      self.heatmap_counts = np.zeros((self.size, self.size), dtype=int)
+      self.heatmap = np.zeros((self.size * 20, self.size * 20, 3), dtype=int)
+
     return init_obs, {}
 
   def step(self, action):
@@ -314,8 +326,44 @@ class LavaTrailEnv(gym.Env):
     grid_unprivileged = np.array(self.grid)
     grid_unprivileged[grid_unprivileged == Entities.trail] = Entities.lava
     grid_unprivileged = grid_unprivileged.flatten()
-    
+
     position = np.array(self.robot_pos)
+
+    # Update the heatmap with the agent's position
+    self.heatmap_counts[self.robot_pos[0], self.robot_pos[1]] += 1
+    # set the initial robot position to not have heatmap count
+    self.heatmap_counts[self.size - self.margin, self.size // 2] = 0
+    max_count = np.max(self.heatmap_counts)
+
+    # Size up the heatmap by 20x, so it's visible in the large image, and make it purple
+    cell_size = 20
+    heatmap_large = np.zeros((self.size * cell_size, self.size * cell_size, 3), dtype=np.uint8)
+    for i in range(self.size):
+      for j in range(self.size):
+        entity = self.grid[i, j]
+
+        # Determine the color for the entity
+        blue = [255, 255, 0]  # Blue, opposite
+        ratio = self.heatmap_counts[i, j] / max_count if max_count > 0 else 0.0  # Scale the color by the heatmap value
+        color = np.array(blue) * ratio  # Scale the color by the heatmap value
+        min_color = 20  # Minimum color value for blue channel
+        color[2] = max(color[2], min_color) if color[2] > 0 else 0  # Ensure the blue channel is at least 10
+
+        # Invert the color
+        color = 255 - color
+
+        # Scale the position of each cell
+        start_x, start_y = j * cell_size, i * cell_size
+        end_x, end_y = start_x + cell_size, start_y + cell_size
+
+        # Fill the corresponding cell area with the correct color
+        heatmap_large[start_y:end_y, start_x:end_x] = color
+
+    self.heatmap = heatmap_large
+    
+    # # Show the heatmap in a separate window using OpenCV
+    # cv2.imshow("Heatmap", self.heatmap)
+    # cv2.waitKey(1)  # Wait for a key press for 1 ms to update the window
 
     # Combine into the observation dictionary
     obs = {
@@ -324,10 +372,11 @@ class LavaTrailEnv(gym.Env):
         "neighbors_unprivileged": neighbors_unprivileged,
         "last_action": last_action,
         "image": image,
-        "large_image": large_image,
+        # "large_image": large_image,
         "grid": grid,
         "grid_unprivileged": grid_unprivileged,
         "position": position,
+        "heatmap": heatmap_large,
     }
 
     # Assert the correct shapes
@@ -336,7 +385,7 @@ class LavaTrailEnv(gym.Env):
     assert obs["neighbors_unprivileged"].shape == (4 * len(Entities),)
     assert obs["last_action"].shape == (len(Actions),)
     assert obs["image"].shape == (self.size, self.size, 3)
-    assert obs["large_image"].shape == (self.size * 20, self.size * 20, 3)
+    # assert obs["large_image"].shape == (self.size * 20, self.size * 20, 3)
 
     return obs
 
@@ -402,13 +451,6 @@ class LavaTrailEnv(gym.Env):
         # Fill the corresponding cell area with the correct color
         img[start_y:end_y, start_x:end_x] = color
 
-        # Draw black outline for each cell (optional, but enhances grid clarity)
-        # Only draw borders on the right and bottom to avoid duplicate borders at edges
-        if j < self.size - 1:  # right border
-          img[start_y:end_y, end_x] = [0, 0, 0]
-        if i < self.size - 1:  # bottom border
-          img[end_y, start_x:end_x] = [0, 0, 0]
-
     return img
 
   
@@ -462,6 +504,9 @@ class LavaTrailEnv(gym.Env):
           grid_str += "\n"
           
     return grid_str
+
+  def get_heatmap(self):
+    return self.heatmap
 
 if __name__ == "__main__":
   size = height = 12
