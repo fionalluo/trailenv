@@ -318,7 +318,7 @@ class LavaTrailEnv(gym.Env):
     
     # Render the grid as an image
     image = self.render_as_image()
-    large_image = self.render_as_large_image()
+    # large_image = self.render_as_large_image()
 
     grid = np.array(self.grid)
     grid = grid.flatten()
@@ -336,7 +336,7 @@ class LavaTrailEnv(gym.Env):
     max_count = np.max(self.heatmap_counts)
 
     # Size up the heatmap by 20x, so it's visible in the large image, and make it purple
-    cell_size = 20
+    cell_size = 1
     heatmap_large = np.zeros((self.size * cell_size, self.size * cell_size, 3), dtype=np.uint8)
     for i in range(self.size):
       for j in range(self.size):
@@ -352,12 +352,14 @@ class LavaTrailEnv(gym.Env):
         # Invert the color
         color = 255 - color
 
-        # Scale the position of each cell
-        start_x, start_y = j * cell_size, i * cell_size
-        end_x, end_y = start_x + cell_size, start_y + cell_size
+        heatmap_large[i, j] = color
 
-        # Fill the corresponding cell area with the correct color
-        heatmap_large[start_y:end_y, start_x:end_x] = color
+        # # Scale the position of each cell
+        # start_x, start_y = j * cell_size, i * cell_size
+        # end_x, end_y = start_x + cell_size, start_y + cell_size
+
+        # # Fill the corresponding cell area with the correct color
+        # heatmap_large[start_y:end_y, start_x:end_x] = color
 
     self.heatmap = heatmap_large
     
