@@ -98,6 +98,7 @@ class BanditPathEnv(gym.Env):
       "image": spaces.Box(low=0, high=255, shape=(self.rows, self.cols, 3), dtype=np.uint8),  # RGB image of the grid
       "large_image": spaces.Box(low=0, high=255, shape=(self.rows * 20, self.cols * 20, 3), dtype=np.uint8),  # Larger RGB image of the grid
       "is_terminal": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),  # 1 if is terminal
+      "position": spaces.Box(low=0, high=1, shape=(2,), dtype=np.int32),  # Position of the agent
     })
 
     self.action_space = spaces.Discrete(len(Actions))
@@ -231,6 +232,8 @@ class BanditPathEnv(gym.Env):
     if self.grid[self.robot_pos[0], self.robot_pos[1]] in [Entities.small_target, Entities.target, Entities.lava]:
       terminal = 1
 
+    position = np.array([self.robot_pos[0], self.robot_pos[1]])
+
     # Combine into the observation dictionary
     obs = {
         "distance": np.array([distance]),
@@ -241,6 +244,7 @@ class BanditPathEnv(gym.Env):
         "image": image,
         "large_image": large_image,
         "is_terminal": terminal,
+        "position": position,
     }
 
     # Assert the correct shapes
@@ -251,6 +255,7 @@ class BanditPathEnv(gym.Env):
     assert obs["target_unprivileged"].shape == (1,)
     assert obs["image"].shape == (self.rows, self.cols, 3)
     assert obs["large_image"].shape == (self.rows * 20, self.cols * 20, 3)
+    assert obs["position"].shape == (2,)
 
     return obs
 
