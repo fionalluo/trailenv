@@ -77,7 +77,7 @@ def colorize(
 
 
 class LavaTrailEnv(gym.Env):
-  def __init__(self, size, trail_seed=None, off_center=True):
+  def __init__(self, size, trail_seed=None, off_center=True, reward_scale=1):
     self.size = size
     self.trail_seed = trail_seed
     self.off_center = off_center
@@ -88,6 +88,7 @@ class LavaTrailEnv(gym.Env):
     self.heatmap = np.zeros((size * 20, size * 20, 3), dtype=int)
     self.heatmap_runs_max = 5000
     self.runs = 0
+    self.reward_scale = reward_scale
 
     # Initialize empty grid
     self._reset_grid()
@@ -274,6 +275,9 @@ class LavaTrailEnv(gym.Env):
     # grid_image = obs["large_image"]  # Get the grid image from observation
     # cv2.imshow("Lava Trail Environment", grid_image)  # Display the image
     # cv2.waitKey(1)  # Wait for a key press for 1 ms, to update the window
+
+    # Scale the reward, if necessary
+    reward *= self.reward_scale
     
     return obs, reward, terminated, truncated, {}
   

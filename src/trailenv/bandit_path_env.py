@@ -79,11 +79,12 @@ def colorize(
 
 
 class BanditPathEnv(gym.Env):
-  def __init__(self, path_length=5):
+  def __init__(self, path_length=5, reward_scale=1):
     self.steps = 0
     self.rows = 2 + path_length
     self.cols = 3 + 2 * path_length
     self.path_length = path_length
+    self.reward_scale = reward_scale
 
     # Initialize empty grid
     self._reset_grid()
@@ -179,6 +180,8 @@ class BanditPathEnv(gym.Env):
 
     truncated = False
     obs = self.gen_obs()
+
+    reward *= self.reward_scale
 
     # # # Show the grid image in a separate window using OpenCV
     # grid_image = obs["large_image"]  # Get the grid image from observation

@@ -105,6 +105,13 @@ for path_length in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
         max_episode_steps=100,
         kwargs=dict(path_length=path_length)
     )
+    for reward_scale in [2, 10, 100, 1000]:
+        register2(
+            id=f"BanditPathEnv{path_length}scale{reward_scale}-v0",
+            entry_point="trailenv.bandit_path_env:BanditPathEnv",
+            max_episode_steps=100,
+            kwargs=dict(path_length=path_length, reward_scale=reward_scale)
+        )
 
 # register2(
 #     id="ObsDictTrailEnv-v0",
