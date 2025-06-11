@@ -8,71 +8,81 @@ print("registering trail env")
 #     max_episode_steps=100,
 #     kwargs=dict(width=12,height=12,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10]])
 # )
-register2(
-    id="TrailEnv-v0",
-    entry_point="trailenv.trail_env:TrailEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=12,height=12,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10]])
-)
 
-register2(
-    id="TrailEnv-v1",
-    entry_point="trailenv.trail_env:TrailEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=20,height=20,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10], [5,11], [6,12], [7,13], [6,14], [5,15], [4,16],[5,17],[6, 18], [7, 19]])
-)
-register2(
-    id="GridBlindPick7x7Env-v0",
-    entry_point="trailenv.trail_env:GridBlindPickEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=7,height=7,start_pos=[3,3])
-)
+# register2(
+#     id="TrailEnv-v0",
+#     entry_point="trailenv.trail_env:TrailEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=12,height=12,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10]])
+# )
 
-register2(
-    id="GridBlindPick15x15Env-v0",
-    entry_point="trailenv.trail_env:GridBlindPickEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=15,height=15,start_pos=[7,7])
-)
+# register2(
+#     id="TrailEnv-v1",
+#     entry_point="trailenv.trail_env:TrailEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=20,height=20,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10], [5,11], [6,12], [7,13], [6,14], [5,15], [4,16],[5,17],[6, 18], [7, 19]])
+# )
+# register2(
+#     id="GridBlindPick7x7Env-v0",
+#     entry_point="trailenv.trail_env:GridBlindPickEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=7,height=7,start_pos=[3,3])
+# )
 
-register2(
-    id="GridBlindPick31x31Env-v0",
-    entry_point="trailenv.trail_env:GridBlindPickEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=31,height=31,start_pos=[15,15])
-)
+# register2(
+#     id="GridBlindPick15x15Env-v0",
+#     entry_point="trailenv.trail_env:GridBlindPickEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=15,height=15,start_pos=[7,7])
+# )
 
-# Centered
-register2(
-    id="GridBlindPick31x31EnvCenter-v0",
-    entry_point="trailenv.trail_env:GridBlindPickEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=31,height=31,start_pos=[15,15],centered=True)
-)
-register2(
-    id="GridBlindPick100x100EnvCenter-v0",
-    entry_point="trailenv.trail_env:GridBlindPickEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=100,height=100,start_pos=[50,50],centered=True)
-)
-for curriculum in [2, 3, 4, 5, 10, 15, 50]:
-    for dim in [7, 15, 31, 100]:
-        for threshold in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
-            register2(
-                id=f"GridBlindPick{dim}x{dim}EnvC{curriculum}Threshold{threshold}-v0",
-                entry_point="trailenv.trail_env:GridBlindPickEnv",
-                max_episode_steps=100,
-                kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold)
-            )
-for curriculum in [2, 3, 4, 5, 10, 15, 50]:
-    for dim in [7, 15, 31, 100]:
-        for threshold in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
-            register2(
-                id=f"GridBlindPick{dim}x{dim}EnvC{curriculum}Threshold{threshold}Center-v0",
-                entry_point="trailenv.trail_env:GridBlindPickEnv",
-                max_episode_steps=100,
-                kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold, centered=True)
-            )
+# register2(
+#     id="GridBlindPick31x31Env-v0",
+#     entry_point="trailenv.trail_env:GridBlindPickEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=31,height=31,start_pos=[15,15])
+# )
+
+# # Centered
+# register2(
+#     id="GridBlindPick31x31EnvCenter-v0",
+#     entry_point="trailenv.trail_env:GridBlindPickEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=31,height=31,start_pos=[15,15],centered=True)
+# )
+# register2(
+#     id="GridBlindPick100x100EnvCenter-v0",
+#     entry_point="trailenv.trail_env:GridBlindPickEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=100,height=100,start_pos=[50,50],centered=True)
+# )
+# for curriculum in [2, 3, 4, 5, 10, 15, 50]:
+#     for dim in [7, 15, 31, 100]:
+#         for threshold in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
+#             register2(
+#                 id=f"GridBlindPick{dim}x{dim}EnvC{curriculum}Threshold{threshold}-v0",
+#                 entry_point="trailenv.trail_env:GridBlindPickEnv",
+#                 max_episode_steps=100,
+#                 kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold)
+#             )
+# for curriculum in [2, 3, 4, 5, 10, 15, 50]:
+#     for dim in [7, 15, 31, 100]:
+#         for threshold in [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]:
+#             register2(
+#                 id=f"GridBlindPick{dim}x{dim}EnvC{curriculum}Threshold{threshold}Center-v0",
+#                 entry_point="trailenv.trail_env:GridBlindPickEnv",
+#                 max_episode_steps=100,
+#                 kwargs=dict(width=dim,height=dim,start_pos=[dim//2, dim//2],curriculum=curriculum, threshold=threshold, centered=True)
+#             )
+
+# Register Tiger Door Environment
+for size in [5, 6, 7, 8, 12, 16, 20, 32, 64, 128]:
+    register2(
+        id=f"TigerDoor{size}x{size}-v0",
+        entry_point="trailenv.tiger_door_env:TigerDoorEnv",
+        max_episode_steps=100,
+        kwargs=dict(size=size)
+    )
 
 # Register Lava Trail Envs
 for size in [7, 8, 12, 16, 20, 32, 64, 128]:
@@ -127,18 +137,18 @@ for path_length in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
 #     kwargs=dict(observation_type="PO",width=12,height=12,start_pos=[1,1],trail=[[2,2],[3,3],[2,4],[3,5],[2,6],[1,7],[2,8],[3,9],[4,10]])
 # )
 
-register2(
-    id="ObsDictTrailEnv-v0",
-    entry_point="trailenv.trail_env:ObsDictTrailEnv",
-    max_episode_steps=100,
-    kwargs=dict(width=7,height=24,start_pos=[1,1],trail=[[14,2],[2,3],[21,4],[3,5]])
-)
-register2(
-    id="POObsDictTrailEnv-v0",
-    entry_point="trailenv.trail_env:ObsDictTrailEnv",
-    max_episode_steps=100,
-    kwargs=dict(observation_type="PO",width=7,height=24,start_pos=[1,1],trail=[[14,2],[2,3],[21,4],[3,5]])
-)
+# register2(
+#     id="ObsDictTrailEnv-v0",
+#     entry_point="trailenv.trail_env:ObsDictTrailEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(width=7,height=24,start_pos=[1,1],trail=[[14,2],[2,3],[21,4],[3,5]])
+# )
+# register2(
+#     id="POObsDictTrailEnv-v0",
+#     entry_point="trailenv.trail_env:ObsDictTrailEnv",
+#     max_episode_steps=100,
+#     kwargs=dict(observation_type="PO",width=7,height=24,start_pos=[1,1],trail=[[14,2],[2,3],[21,4],[3,5]])
+# )
 
 # register(
 #     id="TrailEnv-v1",
