@@ -84,15 +84,33 @@ for size in [5, 6, 7, 8, 12, 16, 20, 32, 64, 128]:
         kwargs=dict(size=size)
     )
 
+# Register Maze Envs
+for size in [7, 8, 12, 16, 20, 32, 64, 128]:
+    # Give the agent a large view (5x5 local crop) if the size is at least 15
+    if size >= 15:
+        register2(
+            id=f"MazeLargeView{size}x{size}-v0",
+            entry_point="trailenv.maze_env:MazeEnv", 
+            max_episode_steps=100,
+            kwargs=dict(size=size, large_view=True)
+        )
+    else:
+        register2(
+            id=f"Maze{size}x{size}-v0",
+            entry_point="trailenv.maze_env:MazeEnv",
+            max_episode_steps=200,
+            kwargs=dict(size=size)
+        )
+
 # Register Lava Trail Envs
 for size in [7, 8, 12, 16, 20, 32, 64, 128]:
-    for seed in range(10):
-        register2(
-            id=f"LavaTrail{size}x{size}Seed{seed}-v0",
-            entry_point="trailenv.lava_trail_env:LavaTrailEnv",
-            max_episode_steps=100,
-            kwargs=dict(size=size, trail_seed=seed)
-        )
+    # for seed in range(10):
+    #     register2(
+    #         id=f"LavaTrail{size}x{size}Seed{seed}-v0",
+    #         entry_point="trailenv.lava_trail_env:LavaTrailEnv",
+    #         max_episode_steps=100,
+    #         kwargs=dict(size=size, trail_seed=seed)
+    #     )
     register2(
         id=f"LavaTrail{size}x{size}-v0",
         entry_point="trailenv.lava_trail_env:LavaTrailEnv",
