@@ -1,3 +1,46 @@
+"""
+Tiger Door Environment
+
+A grid-based environment where an agent must navigate to find a door while avoiding a tiger.
+The agent starts in the top-left corner and can press a button at the bottom-left to reveal
+the door's position. The environment features a vertical path in the first column, a horizontal
+path in the middle that forks into two paths, with the tiger and door randomly placed at the
+ends of these forks.
+
+Observation Space:
+    The environment provides both privileged (teacher) and unprivileged (student) observations:
+
+    Privileged (Teacher) Observations:
+    - distance: Manhattan distance to the door
+    - neighbors: One-hot encoded neighbors (4 directions × 6 entity types)
+    - door: +1 if door is above tiger, -1 otherwise
+    - image: Full grid visualization
+    - is_terminal: 1 if agent reached door/tiger, 0 otherwise
+    - position: Current agent position
+
+    Unprivileged (Student) Observations:
+    - neighbors_unprivileged: One-hot encoded neighbors where tiger and door appear identical
+    - door_unprivileged: Initially 0, becomes ±1 after button press to reveal door position
+    - is_terminal: 1 if agent reached door/tiger, 0 otherwise
+    - position: Current agent position
+
+Action Space:
+    Discrete(4): up, right, down, left
+
+Rewards:
+    +10: Reaching the door
+    -10: Reaching the tiger
+    0: All other actions
+
+Grid Elements:
+    - Agent (A): Cyan
+    - Button (B): Pink
+    - Tiger (T): Red
+    - Door (D): Green
+    - Wall (#): Gray
+    - Empty ( ): White
+"""
+
 from copy import deepcopy
 from enum import IntEnum
 import random
@@ -49,48 +92,6 @@ COLORS = {
 }
 
 class TigerDoorEnv(gym.Env):
-    """Tiger Door Environment
-    
-    A grid-based environment where an agent must navigate to find a door while avoiding a tiger.
-    The agent starts in the top-left corner and can press a button at the bottom-left to reveal
-    the door's position. The environment features a vertical path in the first column, a horizontal
-    path in the middle that forks into two paths, with the tiger and door randomly placed at the
-    ends of these forks.
-
-    Observation Space:
-        The environment provides both privileged (teacher) and unprivileged (student) observations:
-
-        Privileged (Teacher) Observations:
-        - distance: Manhattan distance to the door
-        - neighbors: One-hot encoded neighbors (4 directions × 6 entity types)
-        - door: +1 if door is above tiger, -1 otherwise
-        - image: Full grid visualization
-        - is_terminal: 1 if agent reached door/tiger, 0 otherwise
-        - position: Current agent position
-
-        Unprivileged (Student) Observations:
-        - neighbors_unprivileged: One-hot encoded neighbors where tiger and door appear identical
-        - door_unprivileged: Initially 0, becomes ±1 after button press to reveal door position
-        - is_terminal: 1 if agent reached door/tiger, 0 otherwise
-        - position: Current agent position
-
-    Action Space:
-        Discrete(4): up, right, down, left
-
-    Rewards:
-        +10: Reaching the door
-        -10: Reaching the tiger
-        0: All other actions
-
-    Grid Elements:
-        - Agent (A): Cyan
-        - Button (B): Pink
-        - Tiger (T): Red
-        - Door (D): Green
-        - Wall (#): Gray
-        - Empty ( ): White
-    """
-    
     def __init__(self, row_size=7, col_size=7):
         super().__init__()
         self.row_size = row_size

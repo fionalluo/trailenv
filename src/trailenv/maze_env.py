@@ -1,3 +1,41 @@
+"""
+Maze Environment
+
+A procedurally generated maze environment where an agent must navigate from the bottom-left
+corner to one of three possible goal positions (upper-left, upper-right, or lower-right).
+The maze is generated using a depth-first search algorithm ensuring single-width paths
+and proper connectivity to all corners.
+
+Observation Space:
+    The environment provides both privileged (teacher) and unprivileged (student) observations:
+
+    Privileged (Teacher) Observations:
+    - distance: Manhattan distance to the goal
+    - neighbors: 8 × len(entities) one-hot encoded neighbors (3x3 or 5x5 region around agent)
+    - image: Full maze visualization
+    - is_terminal: 1 if agent reached goal, 0 otherwise
+    - goal_position: One-hot encoded goal position (upper-left, upper-right, lower-right)
+
+    Unprivileged (Student) Observations:
+    - neighbors: 8 × len(entities) one-hot encoded neighbors (3x3 or 5x5 region around agent)
+    - image: Full maze visualization
+    - is_terminal: 1 if agent reached goal, 0 otherwise
+
+Action Space:
+    Discrete(4): up, right, down, left
+
+Rewards:
+    +100: Reaching the goal
+     0: All other actions
+
+Grid Elements:
+    - Agent (A): Cyan
+    - Goal (G): Green
+    - Wall (#): Gray
+    - Empty ( ): White
+    - Visited (V): Light Yellow
+"""
+
 from copy import deepcopy
 from enum import IntEnum
 import random
@@ -26,35 +64,6 @@ class Entities(IntEnum):
     visited = 4  # New entity type for visited cells
 
 class MazeEnv(gym.Env):
-    """Maze Environment
-    
-    A procedurally generated maze environment where an agent must navigate from the bottom-left
-    corner to one of three possible goal positions (upper-left, upper-right, or lower-right).
-    The maze is generated using a depth-first search algorithm ensuring single-width paths
-    and proper connectivity to all corners.
-
-    Observation Space:
-        - distance: Manhattan distance to the goal
-        - neighbors: 8 × len(entities) one-hot encoded neighbors (3x3 or 5x5 region around agent)
-        - image: Full maze visualization
-        - is_terminal: 1 if agent reached goal, 0 otherwise
-        - goal_position: One-hot encoded goal position (upper-left, upper-right, lower-right)
-
-    Action Space:
-        Discrete(4): up, right, down, left
-
-    Rewards:
-        +100: Reaching the goal
-         0: All other actions
-
-    Grid Elements:
-        - Agent (A): Cyan
-        - Goal (G): Green
-        - Wall (#): Gray
-        - Empty ( ): White
-        - Visited (V): Light Yellow
-    """
-    
     # Define colors for visualization
     COLORS = {
         'agent': (0, 255, 255),    # cyan

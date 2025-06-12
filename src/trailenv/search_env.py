@@ -1,3 +1,40 @@
+"""
+Search Environment
+
+A simple grid-based environment where an agent must navigate to find a goal.
+The environment consists of a square grid where the agent and goal are randomly placed.
+The agent must navigate to reach the goal while avoiding going out of bounds.
+
+Observation Space:
+    The environment provides both privileged (teacher) and unprivileged (student) observations:
+
+    Privileged (Teacher) Observations:
+    - distance: Manhattan distance to the goal
+    - neighbors: One-hot encoded neighbors (4 directions × 3 entity types)
+    - image: Full grid visualization
+    - is_terminal: 1 if agent reached goal, 0 otherwise
+    - goal_position: Current goal position (row, col)
+    - agent_position: Current agent position (row, col)
+
+    Unprivileged (Student) Observations:
+    - neighbors: One-hot encoded neighbors (4 directions × 3 entity types)
+    - image: Full grid visualization
+    - is_terminal: 1 if agent reached goal, 0 otherwise
+    - agent_position: Current agent position (row, col)
+
+Action Space:
+    Discrete(4): up, right, down, left
+
+Rewards:
+    +100: Reaching the goal
+     0: All other actions
+
+Grid Elements:
+    - Agent (A): Cyan
+    - Goal (G): Green
+    - Empty ( ): White
+"""
+
 from copy import deepcopy
 from enum import IntEnum
 import random
