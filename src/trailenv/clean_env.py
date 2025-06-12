@@ -1,38 +1,36 @@
 """
-Search Environment
+Clean Environment
 
-A simple grid-based environment where an agent must navigate to find a goal.
-The environment consists of a square grid where the agent and goal are randomly placed.
-The agent must navigate to reach the goal while avoiding going out of bounds.
+A grid-based environment where an agent must clean all dirty cells in the grid.
+The agent starts at a random position and leaves clean cells in its path.
+The goal is to clean all cells in the grid.
 
 Observation Space:
     The environment provides both privileged (teacher) and unprivileged (student) observations:
 
     Privileged (Teacher) Observations:
-    - distance: Manhattan distance to the goal
     - neighbors: One-hot encoded neighbors (4 directions × 3 entity types)
     - image: Full grid visualization
-    - is_terminal: 1 if agent reached goal, 0 otherwise
-    - goal_position: Current goal position (row, col)
-    - agent_position: Current agent position (row, col)
+    - is_terminal: 1 if all cells are clean, 0 otherwise
+    - position: Current agent position (row, col)
 
     Unprivileged (Student) Observations:
     - neighbors: One-hot encoded neighbors (4 directions × 3 entity types)
-    - image: Full grid visualization
-    - is_terminal: 1 if agent reached goal, 0 otherwise
-    - agent_position: Current agent position (row, col)
+    - is_terminal: 1 if all cells are clean, 0 otherwise
+    - position: Current agent position (row, col)
 
 Action Space:
     Discrete(4): up, right, down, left
 
 Rewards:
-    +100: Reaching the goal
-     0: All other actions
+    +100: Cleaning all cells
+    +0.5: Cleaning a new cell
+    0: Moving to an already clean cell
 
 Grid Elements:
     - Agent (A): Cyan
-    - Goal (G): Green
-    - Empty ( ): White
+    - Dirty (D): Light Green
+    - Clean ( ): White
 """
 
 from copy import deepcopy
@@ -55,81 +53,57 @@ ACTION_COORDS = {
     Actions.down: np.array([1, 0]),
 }
 
+KEY_ACTION_MAP = {
+    "w": Actions.up,
+    "a": Actions.left,
+    "s": Actions.down,
+    "d": Actions.right,
+}
+
 class Entities(IntEnum):
-    empty = 0
+    clean = 0
     agent = 1
-    goal = 2
+    dirty = 2
     wall = 3  # New entity type for out of bounds
 
-class SearchEnv(gym.Env):
-    """Search Environment
-    
-    A simple grid-based environment where an agent must navigate to find a goal.
-    The agent and goal are randomly placed on a square grid, and the agent must
-    navigate to reach the goal.
+# Define colors for visualization
+COLORS = {
+    'agent': (0, 255, 255),    # cyan
+    'dirty': (144, 238, 144),  # light green
+    'clean': (255, 255, 255),  # white
+    'wall': (128, 128, 128)    # gray
+}
 
-    Observation Space:
-        - distance: Manhattan distance to the goal
-        - neighbors: One-hot encoded neighbors (4 directions × 3 entity types)
-        - image: Full grid visualization
-        - is_terminal: 1 if agent reached goal, 0 otherwise
-        - goal_position: Current goal position
-        - agent_position: Current agent position
-
-    Action Space:
-        Discrete(4): up, right, down, left
-
-    Rewards:
-        +100: Reaching the goal
-         0: All other actions
-
-    Grid Elements:
-        - Agent (A): Cyan
-        - Goal (G): Green
-        - Empty ( ): White
-    """
-    
-    # Define colors for visualization
-    COLORS = {
-        'agent': (0, 255, 255),    # cyan
-        'goal': (0, 255, 0),       # green
-        'empty': (255, 255, 255),  # white
-        'wall': (128, 128, 128)    # gray
-    }
-    
+class CleanEnv(gym.Env):
     def __init__(self, size=7):
         super().__init__()
         self.size = size
         self.steps = 0
         
-        # Initialize empty grid
+        # Initialize grid
         self._reset_grid()
         
         # Define observation space
         self.observation_space = spaces.Dict({
-            "distance": spaces.Box(low=0, high=2*size, shape=(1,), dtype=np.int32),
             "neighbors": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),
             "image": spaces.Box(low=0, high=255, shape=(size, size, 3), dtype=np.uint8),
             "is_terminal": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
-            "goal_position": spaces.Box(low=0, high=size-1, shape=(2,), dtype=np.int32),
-            "agent_position": spaces.Box(low=0, high=size-1, shape=(2,), dtype=np.int32),
+            "position": spaces.Box(low=0, high=size-1, shape=(2,), dtype=np.int32),
         })
         
         self.action_space = spaces.Discrete(len(Actions))
         
     def _reset_grid(self):
-        """Create the grid with random agent and goal positions."""
-        # Initialize grid with empty cells
-        self.grid = np.zeros((self.size, self.size), dtype=int)
+        """Create the grid with all cells dirty and random agent position."""
+        # Initialize grid with dirty cells
+        self.grid = np.ones((self.size, self.size), dtype=int) * Entities.dirty
         
-        # Randomly place agent and goal
-        positions = random.sample([(i, j) for i in range(self.size) for j in range(self.size)], 2)
-        self.agent_pos = np.array(positions[0])
-        self.goal_pos = np.array(positions[1])
-        
-        # Update grid
+        # Randomly place agent
+        self.agent_pos = np.array([
+            random.randint(0, self.size-1),
+            random.randint(0, self.size-1)
+        ])
         self.grid[self.agent_pos[0], self.agent_pos[1]] = Entities.agent
-        self.grid[self.goal_pos[0], self.goal_pos[1]] = Entities.goal
         
         # Make a copy of the initial grid for resetting states
         self.initial_grid = deepcopy(self.grid)
@@ -162,20 +136,24 @@ class SearchEnv(gym.Env):
         if not within_bounds:
             new_pos = old_pos
             
+        # Calculate reward
+        reward = 0
+        if within_bounds:
+            # Check if we're cleaning a new cell
+            if self.grid[new_pos[0], new_pos[1]] == Entities.dirty:
+                reward = 0.5
+                
         # Update the grid
-        self.grid[old_pos[0], old_pos[1]] = Entities.empty
+        self.grid[old_pos[0], old_pos[1]] = Entities.clean
         self.grid[new_pos[0], new_pos[1]] = Entities.agent
         
         # Update agent position
         self.agent_pos = new_pos
         
-        # Calculate reward
-        reward = 0
-        terminated = False
-        
-        if tuple(self.agent_pos) == tuple(self.goal_pos):
+        # Check if all cells are clean
+        terminated = np.all(self.grid != Entities.dirty)
+        if terminated:
             reward = 100
-            terminated = True
             
         self.steps += 1
         truncated = False
@@ -185,9 +163,6 @@ class SearchEnv(gym.Env):
         
     def gen_obs(self):
         """Generate the observation dictionary."""
-        # Get manhattan distance to goal
-        distance = np.abs(self.agent_pos[0] - self.goal_pos[0]) + np.abs(self.agent_pos[1] - self.goal_pos[1])
-        
         # Get neighbors and one-hot encode them
         neighbors_raw = self._get_neighbors()
         neighbors = np.zeros((4 * len(Entities),), dtype=np.int32)
@@ -198,15 +173,13 @@ class SearchEnv(gym.Env):
         image = self.render_as_image()
         
         # Check if terminal
-        terminal = 1 if tuple(self.agent_pos) == tuple(self.goal_pos) else 0
+        terminal = 1 if np.all(self.grid != Entities.dirty) else 0
         
         return {
-            "distance": np.array([distance]),
             "neighbors": neighbors,
             "image": image,
             "is_terminal": np.array([terminal]),
-            "goal_position": self.goal_pos,
-            "agent_position": self.agent_pos,
+            "position": self.agent_pos,
         }
         
     def render_as_image(self):
@@ -216,20 +189,20 @@ class SearchEnv(gym.Env):
             for j in range(self.size):
                 entity = self.grid[i, j]
                 if entity == Entities.agent:
-                    image[i, j] = self.COLORS['agent']
-                elif entity == Entities.goal:
-                    image[i, j] = self.COLORS['goal']
-                else:  # empty
-                    image[i, j] = self.COLORS['empty']
+                    image[i, j] = COLORS['agent']
+                elif entity == Entities.dirty:
+                    image[i, j] = COLORS['dirty']
+                else:  # clean
+                    image[i, j] = COLORS['clean']
         return image
         
     @property
     def ascii(self):
         """Return ASCII representation of the current grid state."""
         entity_to_char = {
-            Entities.empty: ' ',
+            Entities.clean: ' ',
             Entities.agent: 'A',
-            Entities.goal: 'G',
+            Entities.dirty: 'D',
             Entities.wall: '#',
         }
         
@@ -246,10 +219,10 @@ def main():
     """Main function to test the environment with keyboard controls."""
     import sys
     
-    env = SearchEnv()
+    env = CleanEnv()
     obs, _ = env.reset()
     
-    print("\nSearch Environment")
+    print("\nClean Environment")
     print("Use WASD keys to move the agent.")
     print("Press 'q' to quit.")
     print("Press 'r' to reset the environment.")
@@ -291,13 +264,11 @@ def main():
         
         # Print observations
         print("\nObservations:")
-        print(f"Distance to goal: {obs['distance'][0]}")
         print(f"Neighbors: {obs['neighbors']}")
-        print(f"Goal position: {obs['goal_position']}")
-        print(f"Agent position: {obs['agent_position']}")
+        print(f"Position: {obs['position']}")
         
         if terminated:
-            print("\nSuccess! You reached the goal!")
+            print("\nSuccess! All cells are clean!")
             obs, _ = env.reset()
             print("\nNew episode started:")
             print(env.ascii)
