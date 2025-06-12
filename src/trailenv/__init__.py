@@ -102,6 +102,15 @@ for size in [7, 8, 12, 16, 20, 32, 64, 128]:
             kwargs=dict(size=size)
         )
 
+# Register Search Envs (simple)
+for size in [7, 8, 10, 12, 16, 20, 32, 64, 128]:
+    register2(
+        id=f"Search{size}x{size}-v0",
+        entry_point="trailenv.search_env:SearchEnv",
+        max_episode_steps=100,
+        kwargs=dict(size=size)
+    )
+
 # Register Lava Trail Envs
 for size in [7, 8, 12, 16, 20, 32, 64, 128]:
     # for seed in range(10):
