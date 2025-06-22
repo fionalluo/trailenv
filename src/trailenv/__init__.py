@@ -84,17 +84,27 @@ for size in [5, 6, 7, 8, 12, 16, 20, 32, 64, 128]:
         kwargs=dict(size=size)
     )
 
+# Register Tiger Door Environment
+register2(
+    id=f"TigerDoorKey-v0",
+    entry_point="trailenv.tiger_door_key_env:TigerDoorKeyEnv",
+    max_episode_steps=100,
+)  # default tiger door environment (11 rows, 9 cols)
+# custom sizes can be defined as needed later.
+
 # Register Maze Envs
-for size in [7, 8, 12, 16, 20, 32, 64, 128]:
+for size in [7, 9, 11, 13, 15, 17, 21, 31]:
     # Give the agent a large view (5x5 local crop) if the size is at least 15
-    if size >= 15:
+    if size < 15:
+        # allocate more steps for larger mazes
         register2(
-            id=f"MazeLargeView{size}x{size}-v0",
+            id=f"Maze{size}x{size}-v0",
             entry_point="trailenv.maze_env:MazeEnv", 
             max_episode_steps=100,
-            kwargs=dict(size=size, large_view=True)
+            kwargs=dict(size=size)
         )
     else:
+        # allocate less steps for smaller mazes
         register2(
             id=f"Maze{size}x{size}-v0",
             entry_point="trailenv.maze_env:MazeEnv",
