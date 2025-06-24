@@ -86,6 +86,7 @@ class PrivilegedEntities(IntEnum):
     treasure_door = 5
     tiger_door = 6
     locked_door = 7
+    unknown_door = 8
 
 # Define colors for visualization
 COLORS = {
@@ -114,11 +115,11 @@ class TigerDoorKeyEnv(gym.Env):
         self.observation_space = spaces.Dict({
             "distance_to_treasure": spaces.Box(low=0, high=row_size + col_size, shape=(1,), dtype=np.int32),
             "neighbors": spaces.Box(low=0, high=1, shape=(4 * len(PrivilegedEntities),), dtype=np.int32),
-            "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(Entities),), dtype=np.int32),
+            "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(PrivilegedEntities),), dtype=np.int32),
             "door": spaces.Box(low=-1, high=1, shape=(1,), dtype=np.int32),
             "door_unprivileged": spaces.Box(low=-1, high=1, shape=(1,), dtype=np.int32),
-            "doors_unlocked": spaces.Box(low=0, high=1, shape=(5,), dtype=np.int32),
-            "doors_unlocked_unprivileged": spaces.Box(low=0, high=1, shape=(5,), dtype=np.int32),
+            "doors_unlocked": spaces.Box(low=0, high=1, shape=(6,), dtype=np.int32),  # [known, door0, door1, door2, door3, door4]
+            "doors_unlocked_unprivileged": spaces.Box(low=0, high=1, shape=(6,), dtype=np.int32),
             "has_key": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
             "image": spaces.Box(low=0, high=255, shape=(row_size, col_size, 3), dtype=np.uint8),
             "is_terminal": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
@@ -235,9 +236,14 @@ class TigerDoorKeyEnv(gym.Env):
         # Unprivileged observations
         neighbors_raw = self._get_neighbors()
         
-        neighbors_unprivileged = np.zeros((4 * len(Entities),), dtype=np.int32)
-        for i, (entity, _) in enumerate(neighbors_raw):
-            neighbors_unprivileged[i * len(Entities) + entity] = 1
+        neighbors_unprivileged = np.zeros((4 * len(PrivilegedEntities),), dtype=np.int32)
+        for i, (entity, pos) in enumerate(neighbors_raw):
+            if entity == Entities.door:
+                # For unprivileged, all doors look the same (unknown_door)
+                neighbors_unprivileged[i * len(PrivilegedEntities) + PrivilegedEntities.unknown_door] = 1
+            else:
+                # Map regular entities directly
+                neighbors_unprivileged[i * len(PrivilegedEntities) + entity] = 1
 
         neighbors_privileged = np.zeros((4 * len(PrivilegedEntities),), dtype=np.int32)
         for i, (entity, pos) in enumerate(neighbors_raw):
@@ -254,9 +260,19 @@ class TigerDoorKeyEnv(gym.Env):
         door_relative_pos = 1 if self.treasure_pos[0] < self.tiger_pos[0] else -1
         door_unprivileged = door_relative_pos if self.button_pressed else 0
 
-        doors_unlocked = np.zeros(5, dtype=np.int32)
-        doors_unlocked[[self.treasure_door_idx, self.tiger_door_idx]] = 1
-        doors_unlocked_unprivileged = doors_unlocked if self.key_collected else np.zeros(5, dtype=np.int32)
+        # Privileged: always known, doors_unlocked[0] = 1, doors_unlocked[1:6] = door states
+        doors_unlocked = np.zeros(6, dtype=np.int32)
+        doors_unlocked[0] = 1  # known = True
+        doors_unlocked[1 + self.treasure_door_idx] = 1  # treasure door
+        doors_unlocked[1 + self.tiger_door_idx] = 1     # tiger door
+        
+        # Unprivileged: known only if key collected
+        doors_unlocked_unprivileged = np.zeros(6, dtype=np.int32)
+        if self.key_collected:
+            doors_unlocked_unprivileged[0] = 1  # known = True
+            doors_unlocked_unprivileged[1 + self.treasure_door_idx] = 1  # treasure door
+            doors_unlocked_unprivileged[1 + self.tiger_door_idx] = 1     # tiger door
+        # else: known = False (default), all door states = 0
 
         has_key = 1 if self.key_collected else 0
         is_terminal = 1 if tuple(self.agent_pos) in [self.treasure_pos, self.tiger_pos] else 0
@@ -370,8 +386,8 @@ def main():
         print(f"Button pressed: {env.button_pressed}")
         print(f"Door privileged: {obs['door'][0]}")
         print(f"Door unprivileged: {obs['door_unprivileged'][0]}")
-        print(f"Doors unlocked privileged: {obs['doors_unlocked']}")
-        print(f"Doors unlocked unprivileged: {obs['doors_unlocked_unprivileged']}")
+        print(f"Doors unlocked privileged: [known={obs['doors_unlocked'][0]}, doors={obs['doors_unlocked'][1:]}]")
+        print(f"Doors unlocked unprivileged: [known={obs['doors_unlocked_unprivileged'][0]}, doors={obs['doors_unlocked_unprivileged'][1:]}]")
         
         if terminated:
             if reward > 0:

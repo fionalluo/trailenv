@@ -1,7 +1,7 @@
 from gymnasium.envs.registration import register as register2
 # from gym.envs.registration import register
 from trailenv.lava_env import make_lava_env, make_lava_cliff_env
-print("registering trail env")
+print("Registering TrailEnv")
 # register(
 #     id="TrailEnv-v0",
 #     entry_point="trailenv.trail_env:TrailEnv",
