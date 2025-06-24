@@ -78,13 +78,18 @@ class MazeEnv(gym.Env):
         self._reset_grid()
         
         # Define observation space
+        max_distance = 2 * self.size  # Maximum possible manhattan distance
         self.observation_space = spaces.Dict({
-            "distance": spaces.Box(low=0, high=2*self.size, shape=(1,), dtype=np.int32),
+            "distance": spaces.Box(low=0, high=max_distance, shape=(2,), dtype=np.int32),  # [known, distance]
+            "distance_unprivileged": spaces.Box(low=0, high=max_distance, shape=(2,), dtype=np.int32),
             "neighbors_3x3": spaces.Box(low=0, high=1, shape=(3, 3, len(Entities)), dtype=np.int32),
+            "neighbors_3x3_unprivileged": spaces.Box(low=0, high=1, shape=(3, 3, len(Entities)), dtype=np.int32),
             "neighbors_5x5": spaces.Box(low=0, high=1, shape=(5, 5, len(Entities)), dtype=np.int32),
+            "neighbors_5x5_unprivileged": spaces.Box(low=0, high=1, shape=(5, 5, len(Entities)), dtype=np.int32),
             "image": spaces.Box(low=0, high=255, shape=(self.size, self.size, 3), dtype=np.uint8),
             "is_terminal": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
-            "goal_position": spaces.Box(low=0, high=1, shape=(3,), dtype=np.int32),
+            "goal_position": spaces.Box(low=0, high=1, shape=(4,), dtype=np.int32),  # [known, goal0, goal1, goal2]
+            "goal_position_unprivileged": spaces.Box(low=0, high=1, shape=(4,), dtype=np.int32),
             "position": spaces.Box(low=0, high=self.size-1, shape=(2,), dtype=np.int32),
         })
         
@@ -218,18 +223,25 @@ class MazeEnv(gym.Env):
         terminal = 1 if tuple(self.agent_pos) == tuple(self.goal_pos) else 0
         
         # One-hot encode goal position
-        goal_position = np.zeros(3, dtype=np.int32)
-        goal_position[self.goal_idx] = 1
+        goal_position = np.zeros(4, dtype=np.int32)
+        goal_position[0] = 1  # known = True
+        goal_position[1 + self.goal_idx] = 1  # goal position
         
-        return {
-            "distance": np.array([distance]),
+        obs = {
+            "distance": np.array([1, distance], dtype=np.int32),  # [known=True, distance]
+            "distance_unprivileged": np.array([0, 0], dtype=np.int32),  # [known=False, distance=0]
             "neighbors_3x3": neighbors_3x3,
+            "neighbors_3x3_unprivileged": np.zeros_like(neighbors_3x3),  # Zero padding
             "neighbors_5x5": neighbors_5x5,
+            "neighbors_5x5_unprivileged": np.zeros_like(neighbors_5x5),  # Zero padding
             "image": image,
-            "is_terminal": np.array([terminal]),
-            "goal_position": goal_position,
+            "is_terminal": np.array([terminal], dtype=np.int32),
+            "goal_position": goal_position,  # [known=True, goal0, goal1, goal2]
+            "goal_position_unprivileged": np.array([0, 0, 0, 0], dtype=np.int32),  # [known=False, all_goals=0]
             "position": self.agent_pos.astype(np.int32),
         }
+        
+        return obs
         
     def render_as_image(self):
         """Generate an image of the grid."""
@@ -365,10 +377,12 @@ def main():
         
         # Print observations
         print("\nObservations:")
-        print(f"Distance to goal: {obs['distance'][0]}")
+        print(f"Distance privileged: [known={obs['distance'][0]}, distance={obs['distance'][1]}]")
+        print(f"Distance unprivileged: [known={obs['distance_unprivileged'][0]}, distance={obs['distance_unprivileged'][1]}]")
         print(f"Neighbors (3x3) shape: {obs['neighbors_3x3'].shape}")
         print(f"Neighbors (5x5) shape: {obs['neighbors_5x5'].shape}")
-        print(f"Goal position: {obs['goal_position']}")
+        print(f"Goal position privileged: [known={obs['goal_position'][0]}, goals={obs['goal_position'][1:]}]")
+        print(f"Goal position unprivileged: [known={obs['goal_position_unprivileged'][0]}, goals={obs['goal_position_unprivileged'][1:]}]")
         print(f"Agent position: {obs['position']}")
         
         # Show a sample of the 3x3 neighbors (center cell)
