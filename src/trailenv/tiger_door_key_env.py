@@ -306,18 +306,35 @@ class TigerDoorKeyEnv(gym.Env):
                 elif entity == Entities.key:
                     image[r, c] = COLORS['key']
                 elif entity == Entities.door:
-                    if show_hidden:
-                        if (r, c) == self.treasure_pos:
-                            image[r, c] = COLORS['treasure']
-                        elif (r, c) == self.tiger_pos:
-                            image[r, c] = COLORS['tiger']
-                        else:
-                            image[r, c] = COLORS['door']
+                    # Always show treasure/tiger colors for visualization
+                    if (r, c) == self.treasure_pos:
+                        image[r, c] = COLORS['treasure']  # Green for treasure
+                    elif (r, c) == self.tiger_pos:
+                        image[r, c] = COLORS['tiger']     # Red for tiger
                     else:
-                        image[r,c] = COLORS['door']
+                        image[r, c] = COLORS['door']      # Brown for locked doors
 
         image[self.agent_pos[0], self.agent_pos[1]] = COLORS['agent']
         return image
+
+    def test_colors(self):
+        """Test method to verify color rendering."""
+        print("Testing color rendering...")
+        print("Color definitions (BGR format):")
+        for entity, color in COLORS.items():
+            print(f"  {entity}: {color}")
+        
+        print("\nColor behavior:")
+        print("  - Treasure door: Green (always visible)")
+        print("  - Tiger door: Red (always visible)") 
+        print("  - Locked doors: Brown")
+        print("  - Agent: Cyan")
+        print("  - Key: Yellow")
+        print("  - Button: Pink")
+        print("  - Walls: Gray")
+        print("  - Empty: White")
+        print("\nNote: Colors are always shown for visualization/debugging purposes.")
+        print("The agent's observations still reflect their knowledge state.")
 
     @property
     def ascii(self):
@@ -343,6 +360,12 @@ def main():
     import sys
     
     env = TigerDoorKeyEnv()
+    
+    # Test color rendering
+    print(colorize("\n--- Color Test ---", "cyan", bold=True))
+    env.test_colors()
+    print("--- End Color Test ---\n")
+    
     obs, _ = env.reset()
     
     print(colorize("\nTiger-Door-Key Environment", "cyan", bold=True))
@@ -351,6 +374,9 @@ def main():
     print(colorize("Press 'r' to reset the environment.", "white"))
     print("\nInitial state:")
     print(env.ascii)
+    print(f"Treasure door position: {env.treasure_pos}")
+    print(f"Tiger door position: {env.tiger_pos}")
+    print(f"Locked door positions: {[env.door_positions[i] for i in env.locked_door_indices]}")
     
     while True:
         # Get key press
@@ -388,6 +414,13 @@ def main():
         print(f"Door unprivileged: {obs['door_unprivileged'][0]}")
         print(f"Doors unlocked privileged: [known={obs['doors_unlocked'][0]}, doors={obs['doors_unlocked'][1:]}]")
         print(f"Doors unlocked unprivileged: [known={obs['doors_unlocked_unprivileged'][0]}, doors={obs['doors_unlocked_unprivileged'][1:]}]")
+        
+        # Show door color information
+        print(colorize("Door colors (always visible for visualization):", "green", bold=True))
+        print(f"  Treasure door (green): {env.treasure_pos}")
+        print(f"  Tiger door (red): {env.tiger_pos}")
+        print(f"  Locked doors (brown): {[env.door_positions[i] for i in env.locked_door_indices]}")
+        print(colorize("Note: Agent observations still reflect knowledge state (key/button).", "yellow"))
         
         if terminated:
             if reward > 0:
