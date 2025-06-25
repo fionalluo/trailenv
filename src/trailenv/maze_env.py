@@ -9,8 +9,8 @@ Note that the recursive maze generation algorithm only works with odd side-lengt
 
 Observation Space:
     - image: Full maze visualization.
-    - neighbors_5x5: 24 × len(entities) one-hot encoded neighbors in a 5x5 region.
-    - neighbors_3x3: 8 × len(entities) one-hot encoded neighbors in a 3x3 region.
+    - neighbors_3x3: 8 × len(entities) one-hot encoded neighbors in a 3x3 region (center removed).
+    - neighbors_5x5: 5 × 5 x len(entities) one-hot encoded neighbors in a 5x5 region.
     - goal_position: One-hot encoded goal position (0: top-left, 1: top-right, 2: bottom-right).
     - distance: Manhattan distance to the goal.
     - position: Current position of the agent (row, column).
@@ -82,8 +82,8 @@ class MazeEnv(gym.Env):
         self.observation_space = spaces.Dict({
             "distance": spaces.Box(low=0, high=max_distance, shape=(2,), dtype=np.int32),  # [known, distance]
             "distance_unprivileged": spaces.Box(low=0, high=max_distance, shape=(2,), dtype=np.int32),
-            "neighbors_3x3": spaces.Box(low=0, high=1, shape=(3, 3, len(Entities)), dtype=np.int32),
-            "neighbors_3x3_unprivileged": spaces.Box(low=0, high=1, shape=(3, 3, len(Entities)), dtype=np.int32),
+            "neighbors_3x3": spaces.Box(low=0, high=1, shape=(8 * len(Entities),), dtype=np.int32),
+            "neighbors_3x3_unprivileged": spaces.Box(low=0, high=1, shape=(8 * len(Entities),), dtype=np.int32),
             "neighbors_5x5": spaces.Box(low=0, high=1, shape=(5, 5, len(Entities)), dtype=np.int32),
             "neighbors_5x5_unprivileged": spaces.Box(low=0, high=1, shape=(5, 5, len(Entities)), dtype=np.int32),
             "image": spaces.Box(low=0, high=255, shape=(self.size, self.size, 3), dtype=np.uint8),
@@ -161,6 +161,22 @@ class MazeEnv(gym.Env):
                 else:
                     neighbors.append(Entities.wall)
         return neighbors
+    
+    def _flatten_3x3_neighbors(self, neighbors_3x3_raw):
+        """Flatten 3x3 neighbors and remove the center (agent position)."""
+        # Convert to 3x3 grid first
+        neighbors_3x3_grid = np.zeros((3, 3, len(Entities)), dtype=np.int32)
+        for i, entity in enumerate(neighbors_3x3_raw):
+            neighbors_3x3_grid[i // 3, i % 3, entity] = 1
+        
+        # Remove the center (position 1,1) and flatten
+        # Create mask to exclude center
+        mask = np.ones((3, 3), dtype=bool)
+        mask[1, 1] = False  # Remove center
+        
+        # Flatten the masked array
+        flattened = neighbors_3x3_grid[mask].flatten()
+        return flattened
         
     def reset(self, *, seed=None, options=None):
         """Reset the environment."""
@@ -206,9 +222,7 @@ class MazeEnv(gym.Env):
         
         # Get 3x3 neighbors and one-hot encode them
         neighbors_3x3_raw = self._get_neighbors(view_size=3)
-        neighbors_3x3 = np.zeros((3, 3, len(Entities)), dtype=np.int32)
-        for i, entity in enumerate(neighbors_3x3_raw):
-            neighbors_3x3[i // 3, i % 3, entity] = 1
+        neighbors_3x3 = self._flatten_3x3_neighbors(neighbors_3x3_raw)
 
         # Get 5x5 neighbors and one-hot encode them
         neighbors_5x5_raw = self._get_neighbors(view_size=5)
@@ -231,7 +245,7 @@ class MazeEnv(gym.Env):
             "distance": np.array([1, distance], dtype=np.int32),  # [known=True, distance]
             "distance_unprivileged": np.array([0, 0], dtype=np.int32),  # [known=False, distance=0]
             "neighbors_3x3": neighbors_3x3,
-            "neighbors_3x3_unprivileged": np.zeros_like(neighbors_3x3),  # Zero padding
+            "neighbors_3x3_unprivileged": np.zeros(8 * len(Entities), dtype=np.int32),  # Zero padding
             "neighbors_5x5": neighbors_5x5,
             "neighbors_5x5_unprivileged": np.zeros_like(neighbors_5x5),  # Zero padding
             "image": image,
@@ -386,11 +400,11 @@ def main():
         print(f"Agent position: {obs['position']}")
         
         # Show a sample of the 3x3 neighbors (center cell)
-        print(f"3x3 neighbors center: {obs['neighbors_3x3'][1, 1]}")
+        print(f"3x3 neighbors flattened shape: {obs['neighbors_3x3'].shape}")
         print(f"5x5 neighbors center: {obs['neighbors_5x5'][2, 2]}")
         
         # Display neighbor crops in readable format
-        env.display_neighbors(obs['neighbors_3x3'], "3x3 Neighbors")
+        print(f"3x3 neighbors (flattened): {obs['neighbors_3x3']}")
         env.display_neighbors(obs['neighbors_5x5'], "5x5 Neighbors")
         
         if terminated:
