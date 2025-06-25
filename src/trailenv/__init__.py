@@ -84,13 +84,19 @@ for size in [5, 6, 7, 8, 12, 16, 20, 32, 64, 128]:
         kwargs=dict(size=size)
     )
 
-# Register Tiger Door Environment
+# Register Tiger Door Key Environment
 register2(
     id=f"TigerDoorKey-v0",
     entry_point="trailenv.tiger_door_key_env:TigerDoorKeyEnv",
     max_episode_steps=100,
 )  # default tiger door environment (11 rows, 9 cols)
-# custom sizes can be defined as needed later.
+
+# Register the Tiger Door Key LARGE Environment (exploration is more difficult)
+register2(
+    id=f"TigerDoorKeyLarge-v0",
+    entry_point="trailenv.tiger_door_key_large_env:TigerDoorKeyLargeEnv",
+    max_episode_steps=100,
+)
 
 # Register Maze Envs
 for size in [7, 9, 11, 13, 15, 17, 21, 31]:

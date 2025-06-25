@@ -101,7 +101,7 @@ COLORS = {
 }
 
 
-class TigerDoorKeyEnv(gym.Env):
+class TigerDoorKeyLargeEnv(gym.Env):
     def __init__(self, row_size=11, col_size=9):
         super().__init__()
         self.row_size = row_size
@@ -129,41 +129,45 @@ class TigerDoorKeyEnv(gym.Env):
         self.action_space = spaces.Discrete(len(Actions))
 
     def _reset_grid(self):
-        """Create the grid to match the screenshot layout: 7 rows x 6 cols, walls on the border."""
-        self.row_size = 7
-        self.col_size = 6
+        """Create the grid with walls, paths, and special cells based on the layout."""
         self.grid = np.full((self.row_size, self.col_size), Entities.wall)
 
-        # Place empty cells in the inner area
-        for r in range(1, self.row_size-1):
-            for c in range(1, self.col_size-1):
-                self.grid[r, c] = Entities.empty
+        # Create the vertical path for key and button
+        self.grid[1:-1, 1] = Entities.empty
 
-        # Place key (top-left inner)
+        # Create the horizontal path for the agent
+        mid_row = self.row_size // 2
+        self.grid[mid_row, 1:-2] = Entities.empty
+        
+        # Create the vertical path connecting the doors
+        self.grid[1:-1, -3] = Entities.empty
+
+        # Create the 5 door paths
+        self.door_positions = []
+        for i in range(5):
+            door_row = 2*i + 1
+            self.grid[door_row, -3:] = Entities.empty
+            self.grid[door_row, -1] = Entities.door
+            self.door_positions.append((door_row, self.col_size - 1))
+
+        # Place key and button
         self.key_pos = (1, 1)
+        self.button_pos = (self.row_size - 2, 1)
         self.grid[self.key_pos] = Entities.key
-
-        # Place agent (middle-left inner)
-        self.agent_pos = np.array([3, 1])
+        self.grid[self.button_pos] = Entities.button
+        
+        # Agent starting position
+        self.agent_pos = np.array([mid_row, 1])
         self.grid[self.agent_pos[0], self.agent_pos[1]] = Entities.agent
 
-        # Place button (bottom-left inner)
-        self.button_pos = (5, 1)
-        self.grid[self.button_pos] = Entities.button
-
-        # Place doors in the rightmost inner column (col 4)
-        # Brown doors at (1,4), (3,4), (5,4)
-        # Tiger (red) at (2,4), Treasure (green) at (4,4)
-        self.door_positions = [(1, 4), (2, 4), (3, 4), (4, 4), (5, 4)]
-        for pos in self.door_positions:
-            self.grid[pos] = Entities.door
-
-        # Assign treasure and tiger positions
-        self.treasure_pos = (4, 4)
-        self.tiger_pos = (2, 4)
-        self.locked_door_indices = [0, 2, 4]  # indices of brown doors
-        self.treasure_door_idx = 3  # index in door_positions
-        self.tiger_door_idx = 1     # index in door_positions
+        # Set up doors
+        unlocked_indices = random.sample(range(5), 2)
+        self.treasure_door_idx, self.tiger_door_idx = unlocked_indices[0], unlocked_indices[1]
+        
+        self.treasure_pos = self.door_positions[self.treasure_door_idx]
+        self.tiger_pos = self.door_positions[self.tiger_door_idx]
+        
+        self.locked_door_indices = [i for i in range(5) if i not in unlocked_indices]
 
         # Initialize state
         self.key_collected = False
