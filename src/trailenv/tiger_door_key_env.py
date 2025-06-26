@@ -129,7 +129,7 @@ class TigerDoorKeyEnv(gym.Env):
         self.action_space = spaces.Discrete(len(Actions))
 
     def _reset_grid(self):
-        """Create the grid to match the screenshot layout: 7 rows x 6 cols, walls on the border."""
+        """Create the grid to match the screenshot layout: 7 rows x 6 cols, walls on the border, with random treasure/tiger door positions."""
         self.row_size = 7
         self.col_size = 6
         self.grid = np.full((self.row_size, self.col_size), Entities.wall)
@@ -152,18 +152,18 @@ class TigerDoorKeyEnv(gym.Env):
         self.grid[self.button_pos] = Entities.button
 
         # Place doors in the rightmost inner column (col 4)
-        # Brown doors at (1,4), (3,4), (5,4)
-        # Tiger (red) at (2,4), Treasure (green) at (4,4)
         self.door_positions = [(1, 4), (2, 4), (3, 4), (4, 4), (5, 4)]
         for pos in self.door_positions:
             self.grid[pos] = Entities.door
 
-        # Assign treasure and tiger positions
-        self.treasure_pos = (4, 4)
-        self.tiger_pos = (2, 4)
-        self.locked_door_indices = [0, 2, 4]  # indices of brown doors
-        self.treasure_door_idx = 3  # index in door_positions
-        self.tiger_door_idx = 1     # index in door_positions
+        # Randomly assign treasure and tiger positions among the 5 doors
+        door_indices = list(range(5))
+        treasure_door_idx, tiger_door_idx = random.sample(door_indices, 2)
+        self.treasure_door_idx = treasure_door_idx
+        self.tiger_door_idx = tiger_door_idx
+        self.treasure_pos = self.door_positions[treasure_door_idx]
+        self.tiger_pos = self.door_positions[tiger_door_idx]
+        self.locked_door_indices = [i for i in door_indices if i not in [treasure_door_idx, tiger_door_idx]]
 
         # Initialize state
         self.key_collected = False
@@ -336,18 +336,29 @@ class TigerDoorKeyEnv(gym.Env):
     def ascii(self):
         """Return ASCII representation of the current grid state."""
         grid_str = []
-        entity_to_char = {
-            Entities.empty: ' ',
-            Entities.agent: 'A',
-            Entities.wall: '#',
-            Entities.button: 'B',
-            Entities.key: 'K',
-            Entities.door: 'D',
-        }
         for r in range(self.row_size):
             row_str = ""
             for c in range(self.col_size):
-                row_str += entity_to_char[self.grid[r,c]]
+                pos = (r, c)
+                entity = self.grid[r, c]
+                if pos == self.treasure_pos:
+                    row_str += 'T'
+                elif pos == self.tiger_pos:
+                    row_str += 'X'
+                elif entity == Entities.door:
+                    row_str += 'D'
+                elif entity == Entities.empty:
+                    row_str += ' '
+                elif entity == Entities.agent:
+                    row_str += 'A'
+                elif entity == Entities.wall:
+                    row_str += '#'
+                elif entity == Entities.button:
+                    row_str += 'B'
+                elif entity == Entities.key:
+                    row_str += 'K'
+                else:
+                    row_str += '?'
             grid_str.append(row_str)
         return "\n".join(grid_str)
         
