@@ -179,38 +179,44 @@ class TigerDoorKeyEnv(gym.Env):
     def step(self, action):
         """Take a step in the environment."""
         old_pos = self.agent_pos.copy()
-        
-        # Handle movement
-        new_pos = self.agent_pos + ACTION_COORDS[action]
-        if not (0 <= new_pos[0] < self.row_size and 0 <= new_pos[1] < self.col_size and self.grid[new_pos[0], new_pos[1]] != Entities.wall):
+        attempted_pos = self.agent_pos + ACTION_COORDS[action]
+        reward = 0
+        terminated = False
+
+        # Check bounds and wall
+        if not (0 <= attempted_pos[0] < self.row_size and 0 <= attempted_pos[1] < self.col_size):
             new_pos = self.agent_pos
+        elif self.grid[attempted_pos[0], attempted_pos[1]] == Entities.wall:
+            new_pos = self.agent_pos
+        # Check if trying to move into a door
+        elif (tuple(attempted_pos) in self.door_positions):
+            if tuple(attempted_pos) == self.treasure_pos:
+                new_pos = attempted_pos
+                reward = 10
+                terminated = True
+            elif tuple(attempted_pos) == self.tiger_pos:
+                new_pos = attempted_pos
+                reward = -10
+                terminated = True
+            else:  # Locked door
+                new_pos = self.agent_pos  # Stay in place
+                reward = -1  # Penalty for trying locked door
+        else:
+            new_pos = attempted_pos
 
         self.agent_pos = new_pos
         self.grid[old_pos[0], old_pos[1]] = Entities.empty
         self.grid[self.agent_pos[0], self.agent_pos[1]] = Entities.agent
-        
-        # Handle interactions
-        reward = 0
-        terminated = False
-        current_pos_tuple = tuple(self.agent_pos)
 
+        # Handle interactions (key/button)
+        current_pos_tuple = tuple(self.agent_pos)
         if current_pos_tuple == self.key_pos:
             self.key_collected = True
         elif current_pos_tuple == self.button_pos:
             self.button_pressed = True
-        elif current_pos_tuple in self.door_positions:
-            if current_pos_tuple == self.treasure_pos:
-                reward = 10
-                terminated = True
-            elif current_pos_tuple == self.tiger_pos:
-                reward = -10
-                terminated = True
-            else: # Locked door
-                reward = -1
-        
+
         self.steps += 1
         obs = self.gen_obs()
-        
         return obs, reward, terminated, False, {}
 
     def _get_neighbors(self):
