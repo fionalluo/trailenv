@@ -116,9 +116,11 @@ class TigerDoorKeyEnv(gym.Env):
             "distance_to_treasure": spaces.Box(low=0, high=row_size + col_size, shape=(1,), dtype=np.int32),
             "neighbors": spaces.Box(low=0, high=1, shape=(4 * len(PrivilegedEntities),), dtype=np.int32),
             "neighbors_unprivileged": spaces.Box(low=0, high=1, shape=(4 * len(PrivilegedEntities),), dtype=np.int32),
+            "neighbors_unprivileged_nokey": spaces.Box(low=0, high=1, shape=(4 * len(PrivilegedEntities),), dtype=np.int32),
+            "neighbors_unprivileged_nobutton": spaces.Box(low=0, high=1, shape=(4 * len(PrivilegedEntities),), dtype=np.int32),
             "door": spaces.Box(low=-1, high=1, shape=(1,), dtype=np.int32),
             "door_unprivileged": spaces.Box(low=-1, high=1, shape=(1,), dtype=np.int32),
-            "doors_unlocked": spaces.Box(low=0, high=1, shape=(6,), dtype=np.int32),  # [known, door0, door1, door2, door3, door4]
+            "doors_unlocked": spaces.Box(low=0, high=1, shape=(6,), dtype=np.int32),
             "doors_unlocked_unprivileged": spaces.Box(low=0, high=1, shape=(6,), dtype=np.int32),
             "has_key": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
             "image": spaces.Box(low=0, high=255, shape=(row_size, col_size, 3), dtype=np.uint8),
@@ -129,9 +131,9 @@ class TigerDoorKeyEnv(gym.Env):
         self.action_space = spaces.Discrete(len(Actions))
 
     def _reset_grid(self):
-        """Create the grid to match the screenshot layout: 7 rows x 6 cols, walls on the border, with random treasure/tiger door positions."""
+        """Create the grid to match the screenshot layout: 7 rows x 5 cols, walls on the border, with random treasure/tiger door positions."""
         self.row_size = 7
-        self.col_size = 6
+        self.col_size = 5
         self.grid = np.full((self.row_size, self.col_size), Entities.wall)
 
         # Place empty cells in the inner area
@@ -151,8 +153,8 @@ class TigerDoorKeyEnv(gym.Env):
         self.button_pos = (5, 1)
         self.grid[self.button_pos] = Entities.button
 
-        # Place doors in the rightmost inner column (col 4)
-        self.door_positions = [(1, 4), (2, 4), (3, 4), (4, 4), (5, 4)]
+        # Place doors in the rightmost inner column (col 3)
+        self.door_positions = [(1, 3), (2, 3), (3, 3), (4, 3), (5, 3)]
         for pos in self.door_positions:
             self.grid[pos] = Entities.door
 
@@ -241,8 +243,16 @@ class TigerDoorKeyEnv(gym.Env):
         neighbors_unprivileged = np.zeros((4 * len(PrivilegedEntities),), dtype=np.int32)
         for i, (entity, pos) in enumerate(neighbors_raw):
             if entity == Entities.door:
-                # For unprivileged, all doors look the same (unknown_door)
-                neighbors_unprivileged[i * len(PrivilegedEntities) + PrivilegedEntities.unknown_door] = 1
+                if self.key_collected and self.button_pressed:
+                    if pos == self.treasure_pos:
+                        neighbors_unprivileged[i * len(PrivilegedEntities) + PrivilegedEntities.treasure_door] = 1
+                    elif pos == self.tiger_pos:
+                        neighbors_unprivileged[i * len(PrivilegedEntities) + PrivilegedEntities.tiger_door] = 1
+                    else:
+                        neighbors_unprivileged[i * len(PrivilegedEntities) + PrivilegedEntities.locked_door] = 1
+                else:
+                    # For unprivileged, all doors look the same (unknown_door)
+                    neighbors_unprivileged[i * len(PrivilegedEntities) + PrivilegedEntities.unknown_door] = 1
             else:
                 # Map regular entities directly
                 neighbors_unprivileged[i * len(PrivilegedEntities) + entity] = 1
@@ -267,22 +277,42 @@ class TigerDoorKeyEnv(gym.Env):
         doors_unlocked[0] = 1  # known = True
         doors_unlocked[1 + self.treasure_door_idx] = 1  # treasure door
         doors_unlocked[1 + self.tiger_door_idx] = 1     # tiger door
-        
+
+        # Last 3: top-right, right, bottom-right relative to agent
+        directions = [(-1, 1), (0, 1), (1, 1)]
+        for i, (dr, dc) in enumerate(directions):
+            pos = (self.agent_pos[0] + dr, self.agent_pos[1] + dc)
+            if (0 <= pos[0] < self.row_size) and (0 <= pos[1] < self.col_size):
+                if pos == self.treasure_pos or pos == self.tiger_pos:
+                    doors_unlocked[3 + i] = 1
+
         # Unprivileged: known only if key collected
         doors_unlocked_unprivileged = np.zeros(6, dtype=np.int32)
         if self.key_collected:
-            doors_unlocked_unprivileged[0] = 1  # known = True
-            doors_unlocked_unprivileged[1 + self.treasure_door_idx] = 1  # treasure door
-            doors_unlocked_unprivileged[1 + self.tiger_door_idx] = 1     # tiger door
+            doors_unlocked_unprivileged[:] = doors_unlocked[:]
         # else: known = False (default), all door states = 0
 
         has_key = 1 if self.key_collected else 0
         is_terminal = 1 if tuple(self.agent_pos) in [self.treasure_pos, self.tiger_pos] else 0
 
+        # --- neighbors_unprivileged_nokey ---
+        if self.key_collected:
+            neighbors_unprivileged_nokey = neighbors_privileged.copy()
+        else:
+            neighbors_unprivileged_nokey = neighbors_unprivileged.copy()
+
+        # --- neighbors_unprivileged_nobutton ---
+        if self.button_pressed:
+            neighbors_unprivileged_nobutton = neighbors_privileged.copy()
+        else:
+            neighbors_unprivileged_nobutton = neighbors_unprivileged.copy()
+
         return {
             "distance_to_treasure": np.array([distance_to_treasure], dtype=np.int32),
             "neighbors": neighbors_privileged,
             "neighbors_unprivileged": neighbors_unprivileged,
+            "neighbors_unprivileged_nokey": neighbors_unprivileged_nokey,
+            "neighbors_unprivileged_nobutton": neighbors_unprivileged_nobutton,
             "door": np.array([door_relative_pos], dtype=np.int32),
             "door_unprivileged": np.array([door_unprivileged], dtype=np.int32),
             "doors_unlocked": doors_unlocked,
@@ -391,6 +421,33 @@ def main():
     print(f"Tiger door position: {env.tiger_pos}")
     print(f"Locked door positions: {[env.door_positions[i] for i in env.locked_door_indices]}")
     
+    def print_neighbors_ascii(neighbor_array, label):
+        # neighbor_array is (4 * len(PrivilegedEntities),) one-hot for [up, right, down, left]
+        entity_to_char = {
+            0: ' ',  # empty
+            1: 'A',  # agent
+            2: '#',  # wall
+            3: 'B',  # button
+            4: 'K',  # key
+            5: 'T',  # treasure door
+            6: 'X',  # tiger door
+            7: 'D',  # locked door
+            8: '?',  # unknown door
+        }
+        n_entities = len(entity_to_char)
+        # Find which entity is present in each direction
+        directions = ['up', 'right', 'down', 'left']
+        idxs = []
+        for i in range(4):
+            onehot = neighbor_array[i * n_entities:(i + 1) * n_entities]
+            entity_idx = int(np.argmax(onehot))
+            idxs.append(entity_idx)
+        # Print as a grid
+        print(f"{label} (ASCII):")
+        print(f"  {entity_to_char[idxs[0]]}  ")
+        print(f"{entity_to_char[idxs[3]]} A {entity_to_char[idxs[1]]}")
+        print(f"  {entity_to_char[idxs[2]]}  ")
+
     while True:
         # Get key press
         key = input().lower()
@@ -427,6 +484,14 @@ def main():
         print(f"Door unprivileged: {obs['door_unprivileged'][0]}")
         print(f"Doors unlocked privileged: [known={obs['doors_unlocked'][0]}, doors={obs['doors_unlocked'][1:]}]")
         print(f"Doors unlocked unprivileged: [known={obs['doors_unlocked_unprivileged'][0]}, doors={obs['doors_unlocked_unprivileged'][1:]}]")
+        
+        # Debug: Print all neighbor encodings
+        print("\n--- Neighbor Encodings (ASCII) ---")
+        print_neighbors_ascii(obs['neighbors'], 'neighbors')
+        print_neighbors_ascii(obs['neighbors_unprivileged'], 'neighbors_unprivileged')
+        print_neighbors_ascii(obs['neighbors_unprivileged_nokey'], 'neighbors_unprivileged_nokey')
+        print_neighbors_ascii(obs['neighbors_unprivileged_nobutton'], 'neighbors_unprivileged_nobutton')
+        print("--------------------------")
         
         # Show door color information
         print(colorize("Door colors (always visible for visualization):", "green", bold=True))
