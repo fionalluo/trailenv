@@ -84,8 +84,8 @@ class MazeEnv(gym.Env):
             "distance_unprivileged": spaces.Box(low=0, high=max_distance, shape=(2,), dtype=np.int32),
             "neighbors_3x3": spaces.Box(low=0, high=1, shape=(8 * len(Entities),), dtype=np.int32),
             "neighbors_3x3_unprivileged": spaces.Box(low=0, high=1, shape=(8 * len(Entities),), dtype=np.int32),
-            "neighbors_5x5": spaces.Box(low=0, high=1, shape=(5, 5, len(Entities)), dtype=np.int32),
-            "neighbors_5x5_unprivileged": spaces.Box(low=0, high=1, shape=(5, 5, len(Entities)), dtype=np.int32),
+            "neighbors_5x5": spaces.Box(low=0, high=1, shape=(16 * len(Entities),), dtype=np.int32),
+            "neighbors_5x5_unprivileged": spaces.Box(low=0, high=1, shape=(16 * len(Entities),), dtype=np.int32),
             "image": spaces.Box(low=0, high=255, shape=(self.size, self.size, 3), dtype=np.uint8),
             "is_terminal": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
             "goal_position": spaces.Box(low=0, high=1, shape=(4,), dtype=np.int32),  # [known, goal0, goal1, goal2]
@@ -178,6 +178,24 @@ class MazeEnv(gym.Env):
         flattened = neighbors_3x3_grid[mask].flatten()
         return flattened
         
+    def _flatten_5x5_outer_neighbors(self, neighbors_5x5_raw):
+        """Flatten the 16 outer cells of a 5x5 neighbor region (excluding the 3x3 center), one-hot encoded."""
+        # One-hot encode into (5, 5, len(Entities))
+        neighbors_5x5_grid = np.zeros((5, 5, len(Entities)), dtype=np.int32)
+        for i, entity in enumerate(neighbors_5x5_raw):
+            neighbors_5x5_grid[i // 5, i % 5, entity] = 1
+        # Indices for the outer ring (row, col) in 5x5
+        outer_indices = [
+            (0,0),(0,1),(0,2),(0,3),(0,4),
+            (1,4),(2,4),(3,4),
+            (4,4),(4,3),(4,2),(4,1),(4,0),
+            (3,0),(2,0),(1,0)
+        ]
+        flattened = []
+        for r, c in outer_indices:
+            flattened.extend(neighbors_5x5_grid[r, c])
+        return np.array(flattened, dtype=np.int32)
+        
     def reset(self, *, seed=None, options=None):
         """Reset the environment."""
         super().reset(seed=seed)
@@ -224,11 +242,9 @@ class MazeEnv(gym.Env):
         neighbors_3x3_raw = self._get_neighbors(view_size=3)
         neighbors_3x3 = self._flatten_3x3_neighbors(neighbors_3x3_raw)
 
-        # Get 5x5 neighbors and one-hot encode them
+        # Get 5x5 neighbors and flatten the outer ring
         neighbors_5x5_raw = self._get_neighbors(view_size=5)
-        neighbors_5x5 = np.zeros((5, 5, len(Entities)), dtype=np.int32)
-        for i, entity in enumerate(neighbors_5x5_raw):
-            neighbors_5x5[i // 5, i % 5, entity] = 1
+        neighbors_5x5 = self._flatten_5x5_outer_neighbors(neighbors_5x5_raw)
             
         # Render the grid as an image
         image = self.render_as_image()
@@ -241,13 +257,26 @@ class MazeEnv(gym.Env):
         goal_position[0] = 1  # known = True
         goal_position[1 + self.goal_idx] = 1  # goal position
         
+        # Unprivileged neighbors: same as privileged, but goal appears as empty
+        def mask_goal_with_empty(flat_neighbors, n_entities, goal_idx, empty_idx):
+            masked = flat_neighbors.copy()
+            for i in range(len(flat_neighbors) // n_entities):
+                block = masked[i * n_entities:(i + 1) * n_entities]
+                if block[goal_idx] == 1:
+                    block[goal_idx] = 0
+                    block[empty_idx] = 1
+                    masked[i * n_entities:(i + 1) * n_entities] = block
+            return masked
+        neighbors_3x3_unpriv = mask_goal_with_empty(neighbors_3x3, len(Entities), Entities.goal, Entities.empty)
+        neighbors_5x5_unpriv = mask_goal_with_empty(neighbors_5x5, len(Entities), Entities.goal, Entities.empty)
+
         obs = {
             "distance": np.array([1, distance], dtype=np.int32),  # [known=True, distance]
             "distance_unprivileged": np.array([0, 0], dtype=np.int32),  # [known=False, distance=0]
             "neighbors_3x3": neighbors_3x3,
-            "neighbors_3x3_unprivileged": np.zeros(8 * len(Entities), dtype=np.int32),  # Zero padding
+            "neighbors_3x3_unprivileged": neighbors_3x3_unpriv,
             "neighbors_5x5": neighbors_5x5,
-            "neighbors_5x5_unprivileged": np.zeros_like(neighbors_5x5),  # Zero padding
+            "neighbors_5x5_unprivileged": neighbors_5x5_unpriv,
             "image": image,
             "is_terminal": np.array([terminal], dtype=np.int32),
             "goal_position": goal_position,  # [known=True, goal0, goal1, goal2]
@@ -315,6 +344,83 @@ class MazeEnv(gym.Env):
                 entity_idx = np.argmax(neighbors_array[i, j])
                 row.append(entity_to_char[entity_idx])
             print(" ".join(row))
+
+def display_flattened_5x5_neighbors(flat_neighbors, title, n_entities):
+    """Display the flattened 5x5 outer neighbors as a 5x5 ASCII grid, center 3x3 as spaces."""
+    entity_to_char = {
+        0: ' ',  # empty
+        1: 'A',  # agent
+        2: 'G',  # goal
+        3: '#',  # wall
+        4: 'V',  # visited
+    }
+    # Indices for the outer ring (row, col) in 5x5
+    outer_indices = [
+        (0,0),(0,1),(0,2),(0,3),(0,4),
+        (1,4),(2,4),(3,4),
+        (4,4),(4,3),(4,2),(4,1),(4,0),
+        (3,0),(2,0),(1,0)
+    ]
+    # Build a 5x5 grid of chars, fill center 3x3 with spaces
+    grid = [[' ' for _ in range(5)] for _ in range(5)]
+    for idx, (r, c) in enumerate(outer_indices):
+        onehot = flat_neighbors[idx * n_entities:(idx + 1) * n_entities]
+        entity_idx = int(np.argmax(onehot))
+        grid[r][c] = entity_to_char.get(entity_idx, '?')
+    print(f"\n{title} (5x5):")
+    for row in grid:
+        print(' '.join(row))
+
+def display_combined_neighbors(flat_3x3, flat_5x5, title, n_entities):
+    """Display a contiguous 5x5 ASCII grid combining 3x3 and 5x5 neighbor arrays."""
+    entity_to_char = {
+        0: ' ',  # empty
+        1: 'A',  # agent
+        2: 'G',  # goal
+        3: '#',  # wall
+        4: 'V',  # visited
+    }
+    # Indices for the outer ring (row, col) in 5x5
+    outer_indices = [
+        (0,0),(0,1),(0,2),(0,3),(0,4),
+        (1,4),(2,4),(3,4),
+        (4,4),(4,3),(4,2),(4,1),(4,0),
+        (3,0),(2,0),(1,0)
+    ]
+    # Indices for the 3x3 grid (row, col) in 5x5, excluding the center
+    center_3x3_indices = [
+        (1,1),(1,2),(1,3),
+        (2,1),       (2,3),
+        (3,1),(3,2),(3,3)
+    ]
+    # The order in flat_3x3 is row-major, skipping the center (1,1) in 3x3
+    # So the mapping is:
+    # 0 1 2
+    # 3 x 4
+    # 5 6 7
+    # Map these to the correct (r,c) in 5x5
+    flat3x3_to_5x5 = [
+        (1,1), (1,2), (1,3),
+        (2,1),        (2,3),
+        (3,1), (3,2), (3,3)
+    ]
+    # Build a 5x5 grid of chars
+    grid = [[' ' for _ in range(5)] for _ in range(5)]
+    # Fill outer ring from 5x5 neighbors
+    for idx, (r, c) in enumerate(outer_indices):
+        onehot = flat_5x5[idx * n_entities:(idx + 1) * n_entities]
+        entity_idx = int(np.argmax(onehot))
+        grid[r][c] = entity_to_char.get(entity_idx, '?')
+    # Fill center 3x3 from 3x3 neighbors (excluding center)
+    for flat_idx, (r, c) in enumerate(flat3x3_to_5x5):
+        onehot = flat_3x3[flat_idx * n_entities:(flat_idx + 1) * n_entities]
+        entity_idx = int(np.argmax(onehot))
+        grid[r][c] = entity_to_char.get(entity_idx, '?')
+    # Set the center to 'A' (agent)
+    grid[2][2] = 'A'
+    print(f"\n{title} (5x5 combined):")
+    for row in grid:
+        print(' '.join(row))
 
 def colorize(string: str, color: str, bold: bool = False, highlight: bool = False) -> str:
     """Returns string surrounded by appropriate terminal colour codes to print colourised text."""
@@ -400,12 +506,8 @@ def main():
         print(f"Agent position: {obs['position']}")
         
         # Show a sample of the 3x3 neighbors (center cell)
-        print(f"3x3 neighbors flattened shape: {obs['neighbors_3x3'].shape}")
-        print(f"5x5 neighbors center: {obs['neighbors_5x5'][2, 2]}")
-        
-        # Display neighbor crops in readable format
         print(f"3x3 neighbors (flattened): {obs['neighbors_3x3']}")
-        env.display_neighbors(obs['neighbors_5x5'], "5x5 Neighbors")
+        display_combined_neighbors(obs['neighbors_3x3'], obs['neighbors_5x5'], "3x3 + 5x5 Neighbors", len(Entities))
         
         if terminated:
             print(colorize("\nSuccess! You reached the goal!", "green", bold=True))
